@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Nuxt entry point
+const colorMode = useColorMode()
+colorMode.preference = 'light'
 </script>
 
 <template>

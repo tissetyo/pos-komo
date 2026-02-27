@@ -29,14 +29,14 @@ const selectedCategoryFilter = ref('All Categories')
   <div class="space-y-6">
     <div class="flex justify-between items-end">
       <div>
-        <h2 class="text-2xl font-bold text-gray-900">Products & Menu</h2>
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Products & Menu</h2>
         <p class="text-gray-500 text-sm mt-1">Manage your catalogue, pricing, inventory, and variants.</p>
       </div>
       <UButton color="primary" label="New Product" icon="i-lucide-plus" @click="isAddModalOpen = true" />
     </div>
 
     <!-- Filters & Search -->
-    <div class="bg-white p-4 justify-between flex flex-col md:flex-row gap-4 items-center rounded-2xl shadow-sm border border-gray-100">
+    <div class="bg-white dark:bg-gray-900 p-4 justify-between flex flex-col md:flex-row gap-4 items-center rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
        <UInput v-model="search" icon="i-lucide-search" placeholder="Search products or SKU..." class="w-full md:w-80" />
        <div class="flex flex-wrap gap-2 text-sm text-gray-600 w-full md:w-auto">
          <USelectMenu v-model="selectedCategoryFilter" :options="['All Categories', 'Signature', 'Coffee', 'Non-Coffee', 'Tea', 'Pastry', 'Snacks']" class="w-48" />
@@ -45,15 +45,15 @@ const selectedCategoryFilter = ref('All Categories')
     </div>
 
     <!-- Data Table -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <UTable :rows="products" :columns="columns" :ui="{ td: { padding: 'py-4 px-6' }, th: { padding: 'py-4 px-6 text-gray-500 font-medium bg-gray-50/50' } }">
+    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+      <UTable :rows="products" :columns="columns" :ui="{ td: { padding: 'py-4 px-6' }, th: { padding: 'py-4 px-6 text-gray-500 font-medium bg-gray-50/50 dark:bg-gray-900/50' } }">
         <template #name-data="{ row }">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                <UIcon name="i-lucide-image" class="w-5 h-5 text-gray-400" />
             </div>
             <div>
-              <p class="font-medium text-gray-900">{{ row.name }}</p>
+              <p class="font-medium text-gray-900 dark:text-white">{{ row.name }}</p>
               <p class="text-xs text-gray-500 uppercase tracking-widest">{{ row.id }}</p>
             </div>
           </div>
@@ -64,14 +64,14 @@ const selectedCategoryFilter = ref('All Categories')
         </template>
 
         <template #price-data="{ row }">
-          <span class="font-semibold text-gray-900">
+          <span class="font-semibold text-gray-900 dark:text-white">
             Rp {{ row.price.toLocaleString('id-ID') }}
           </span>
         </template>
         
         <template #stock-data="{ row }">
           <div v-if="row.stock === null" class="text-gray-500"><UIcon name="i-lucide-infinity" class="w-4 h-4 ml-2" /></div>
-          <div v-else :class="['font-medium', row.stock === 0 ? 'text-red-500' : 'text-gray-900']">
+          <div v-else :class="['font-medium', row.stock === 0 ? 'text-red-500' : 'text-gray-900 dark:text-white']">
             {{ row.stock }}
           </div>
         </template>

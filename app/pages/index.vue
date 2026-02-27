@@ -10,6 +10,10 @@ onMounted(() => {
 
 <template>
   <div class="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+    <div class="absolute top-6 right-6">
+      <ThemeToggle />
+    </div>
+
     <div class="text-center mb-10">
       <div class="w-20 h-20 bg-primary/10 text-primary rounded-3xl flex items-center justify-center mx-auto mb-6">
         <UIcon name="i-lucide-box" class="w-10 h-10" />
@@ -48,7 +52,7 @@ onMounted(() => {
       <div v-if="!isAuthenticated" class="space-y-4">
         <p class="text-sm text-gray-500">Don't have an account or need to sign in?</p>
         <div class="flex items-center justify-center gap-4">
-          <UButton to="/login" color="gray" variant="solid" class="rounded-xl px-6 py-2 font-semibold">Sign In</UButton>
+          <UButton to="/login" color="neutral" variant="solid" class="rounded-xl px-6 py-2 font-semibold">Sign In</UButton>
           <UButton to="/register" color="primary" variant="soft" class="rounded-xl px-6 py-2 font-semibold">Register Store</UButton>
         </div>
       </div>

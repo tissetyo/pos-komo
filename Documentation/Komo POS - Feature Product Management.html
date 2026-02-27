@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Feature: Product Management</title></head>
+<body>
+<h1>Feature: Product Management</h1>
+<p><a href="Komo POS - Home.html">← Home</a></p>
+<hr>
+
+<h2>User Persona</h2>
+<h3>Manager</h3>
+<p>Ngurusin katalog produk harian. Butuh bisa tambah produk baru dengan cepat, update harga, dan atur apa yang tampil di kasir. Sering update pas lagi sibuk, jadi form harus simpel dan gak banyak field wajib yang gak perlu.</p>
+<h3>Kasir</h3>
+<p>Tidak bisa edit produk, tapi merasakan dampaknya langsung — menu yang ditampilkan di layar kasir adalah hasil dari product management di back-office.</p>
+
+<hr>
+<h2>User Stories</h2>
+<table border="1">
+  <tr><th>ID</th><th>User Story</th><th>Goal</th><th>Priority</th><th>SP</th></tr>
+  <tr>
+    <td>US-012</td>
+    <td>Sebagai <strong>Manager</strong>, gue mau bikin, edit, dan hapus produk lengkap dengan nama, kategori, SKU, harga, dan stok</td>
+    <td>Katalog produk di POS selalu up-to-date dan akurat</td>
+    <td>High</td><td>5</td>
+  </tr>
+  <tr>
+    <td>US-013</td>
+    <td>Sebagai <strong>Manager</strong>, gue mau atur varian dan modifier tiap produk beserta delta harganya</td>
+    <td>Harga di kasir otomatis sesuai kombinasi pilihan customer, gak ada salah harga</td>
+    <td>High</td><td>8</td>
+  </tr>
+  <tr>
+    <td>US-014</td>
+    <td>Sebagai <strong>Manager</strong>, gue mau sembunyiin atau tampilin produk di menu kasir tanpa menghapus produknya</td>
+    <td>Bisa kontrol menu harian (misalnya kalau bahan habis) tanpa kehilangan data produk</td>
+    <td>Medium</td><td>3</td>
+  </tr>
+</table>
+
+<hr>
+<h2>Jira Cards</h2>
+<table border="1">
+  <tr><th>Jira ID</th><th>Task</th><th>User Story</th><th>Deskripsi</th><th>Priority</th><th>SP</th><th>Status</th><th>Figma</th></tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-11">KOMO-011</a></td>
+    <td>CRUD produk di back-office</td>
+    <td>US-012</td>
+    <td>Halaman list produk dengan search dan filter kategori. Form tambah/edit produk: nama, kategori, SKU (unik, divalidasi), harga dasar, stok, foto (max 2MB, JPG/PNG). Hapus produk butuh konfirmasi.</td>
+    <td>High</td><td>5</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-011">figma/komo-011</a></td>
+  </tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-12">KOMO-012</a></td>
+    <td>Varian dan modifier produk</td>
+    <td>US-013</td>
+    <td>Di halaman detail produk, Manager bisa tambah grup varian (contoh: Ukuran dengan opsi S/M/L) dan grup modifier opsional (contoh: Add-on Topping). Tiap opsi punya delta harga plus atau minus.</td>
+    <td>High</td><td>8</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-012">figma/komo-012</a></td>
+  </tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-13">KOMO-013</a></td>
+    <td>Toggle visibilitas produk di kasir</td>
+    <td>US-014</td>
+    <td>Toggle switch hide/show per produk per outlet. Produk yang di-hide tidak tampil di menu kasir outlet tersebut. Perubahan keliatan di kasir dalam 60 detik.</td>
+    <td>Medium</td><td>3</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-013">figma/komo-013</a></td>
+  </tr>
+</table>
+<p><strong>Total Story Points:</strong> 16</p>
+
+<hr>
+<h2>Detail Fitur</h2>
+
+<h3>CRUD Produk</h3>
+<p>Halaman list produk menampilkan semua produk dengan search bar dan filter kategori. Dari sini Manager bisa tap tombol tambah produk baru atau tap produk yang ada untuk edit. Field dalam form produk: nama (wajib), kategori (wajib, pilih dari list atau buat baru), SKU (wajib, divalidasi unik), harga dasar (wajib), stok (opsional — kalau kosong dianggap selalu tersedia), dan foto produk (opsional, max 2MB, format JPG atau PNG). Hapus produk hanya bisa dilakukan kalau produk tidak punya transaksi aktif, dan butuh konfirmasi dialog sebelum benar-benar dihapus.</p>
+
+<h3>Varian Produk</h3>
+<p>Varian adalah pilihan yang mengubah produk secara fundamental. Contoh: produk "Kopi Susu" bisa punya grup varian "Suhu" dengan opsi Hot (+0) dan Ice (+2.000), dan grup varian "Ukuran" dengan opsi Regular (+0) dan Large (+5.000). Manager bisa menandai satu grup varian sebagai required — artinya kasir wajib memilih opsi dari grup tersebut sebelum item bisa ditambah ke order.</p>
+
+<h3>Modifier Produk</h3>
+<p>Modifier adalah add-on opsional yang bisa ditambahkan ke produk. Contoh: grup modifier "Add-on" dengan opsi Extra Shot (+5.000), Oat Milk (+8.000), Less Sugar (+0). Modifier tidak required — kasir bisa lewati kalau customer tidak mau tambahan apapun.</p>
+
+<h3>Toggle Visibilitas per Outlet</h3>
+<p>Di halaman detail produk ada seksi "Ketersediaan per Outlet" yang menampilkan toggle untuk setiap outlet aktif. Manager bisa hide produk di Outlet A sambil tetap tampilkan di Outlet B. Produk yang di-hide tetap ada di katalog back-office dan tetap bisa diedit. Perubahan visibility propagate ke kasir dalam 60 detik melalui background sync.</p>
+</body>
+</html>

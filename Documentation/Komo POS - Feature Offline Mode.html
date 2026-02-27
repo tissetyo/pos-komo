@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Feature: Offline Mode dan Sync</title></head>
+<body>
+<h1>Feature: Offline Mode dan Sync</h1>
+<p><a href="Komo POS - Home.html">← Home</a></p>
+<hr>
+
+<h2>User Persona</h2>
+<h3>Kasir</h3>
+<p>Kasir gak mau tahu soal teknis. Yang dia mau adalah: kalau internet mati, dia tetap bisa kerja seperti biasa. Kalau ada indikator offline, dia mau tau tapi gak panik. Sync harus terjadi otomatis tanpa kasir harus lakuin apapun.</p>
+<h3>Manager / Owner</h3>
+<p>Mau yakin bahwa semua transaksi yang terjadi saat offline tetap tercatat dan masuk ke laporan. Butuh visibilitas kalau ada transaksi yang pending sync atau gagal sync.</p>
+
+<hr>
+<h2>User Stories</h2>
+<table border="1">
+  <tr><th>ID</th><th>User Story</th><th>Goal</th><th>Priority</th><th>SP</th></tr>
+  <tr>
+    <td>US-009</td>
+    <td>Sebagai <strong>Kasir</strong>, gue mau tetap bisa terima order dan proses bayar meski lagi offline</td>
+    <td>Operasional resto gak terganggu sama sekali waktu internet mati</td>
+    <td>High</td><td>8</td>
+  </tr>
+  <tr>
+    <td>US-010</td>
+    <td>Sebagai <strong>Kasir</strong>, gue mau sync transaksi offline ke back-office otomatis atau manual pas online lagi</td>
+    <td>Data transaksi gak ada yang hilang dan tetap lengkap di server</td>
+    <td>High</td><td>8</td>
+  </tr>
+</table>
+
+<hr>
+<h2>Jira Cards</h2>
+<table border="1">
+  <tr><th>Jira ID</th><th>Task</th><th>User Story</th><th>Deskripsi</th><th>Priority</th><th>SP</th><th>Status</th><th>Figma</th></tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-9">KOMO-009</a></td>
+    <td>Order tetap jalan saat offline</td>
+    <td>US-009</td>
+    <td>Pas internet mati, order tetap bisa dibuat dan disimpan lokal di IndexedDB. Banner indikator offline muncul jelas. Counter transaksi pending tampil di layar.</td>
+    <td>High</td><td>8</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-009">figma/komo-009</a></td>
+  </tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-10">KOMO-010</a></td>
+    <td>Sync transaksi offline ke server</td>
+    <td>US-010</td>
+    <td>Pas online lagi, data offline sync otomatis dalam 30 detik. Ada tombol sync manual. Log status sync per transaksi tersedia di settings kasir.</td>
+    <td>High</td><td>8</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-010">figma/komo-010</a></td>
+  </tr>
+</table>
+<p><strong>Total Story Points:</strong> 16</p>
+
+<hr>
+<h2>Detail Fitur</h2>
+
+<h3>Deteksi Offline dan Indikator</h3>
+<p>Sistem mendeteksi koneksi internet menggunakan browser Network API. Saat offline, muncul banner tipis di bagian atas layar kasir bertuliskan "Offline Mode — transaksi tersimpan lokal". Counter menampilkan jumlah transaksi yang belum di-sync. Banner hilang otomatis saat online kembali.</p>
+
+<h3>Penyimpanan Lokal dengan IndexedDB</h3>
+<p>Semua order yang dibuat saat offline disimpan di IndexedDB (local browser storage) di device kasir. Data yang disimpan mencakup: item order, varian yang dipilih, harga, metode bayar, dan timestamp. Data tetap ada meskipun browser ditutup atau device di-restart.</p>
+
+<h3>Batasan Saat Offline</h3>
+<ul>
+  <li>Menu yang ditampilkan adalah snapshot terakhir saat online — perubahan produk dari back-office tidak langsung update</li>
+  <li>WebSocket (status order real-time) tidak aktif saat offline</li>
+  <li>Print struk tetap bisa dilakukan kalau printer terkoneksi via USB atau network lokal</li>
+  <li>QRIS tidak bisa dipakai saat offline (butuh internet untuk generate QR). EDC masih bisa dipakai secara manual.</li>
+</ul>
+
+<h3>Auto Sync Saat Online Kembali</h3>
+<p>Saat koneksi internet kembali, sistem otomatis mulai proses sync dalam 30 detik. Sync dilakukan secara background tanpa mengganggu kasir yang sedang kerja. Transaksi dikirim ke server satu per satu, berurutan berdasarkan timestamp. Kalau ada konflik (misal produk sudah dihapus dari katalog), system log error dan flag untuk di-review Manager.</p>
+
+<h3>Manual Sync</h3>
+<p>Kasir bisa trigger sync manual dari menu settings kasir. Halaman sync menampilkan: jumlah transaksi pending, status sync per transaksi (Pending, Syncing, Done, Failed), dan tombol retry untuk yang gagal.</p>
+
+<h3>Hal yang Perlu Dikonfirmasi</h3>
+<ul>
+  <li>Berapa lama data offline disimpan di device sebelum dianggap expired?</li>
+  <li>Bagaimana handle konflik harga kalau ada produk yang berubah harga saat kasir offline?</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Feature: Kasir POS</title></head>
+<body>
+<h1>Feature: Kasir POS</h1>
+<p><a href="Komo POS - Home.html">← Home</a></p>
+<hr>
+
+<h2>User Persona</h2>
+<h3>Kasir</h3>
+<p>Orang yang ada di depan counter dan handle transaksi customer langsung. Waktu mereka terbatas, situasinya sering rame, dan mereka gak ada waktu untuk mikir panjang. UI harus obvious — tap, done. Bayangin kayak layar vending machine kopi: pilih item, bayar, selesai.</p>
+<p><strong>Kebutuhan utama:</strong> UI simpel, card gede, tau order mana yang lagi diproses dan yang udah selesai. Gak butuh analytics atau setting apapun.</p>
+<p><strong>Pain point yang mau dihindari:</strong> Terlalu banyak langkah buat proses satu order, salah klik karena tombol kecil, bingung order mana yang mana saat ramai.</p>
+
+<hr>
+<h2>User Stories</h2>
+<table border="1">
+  <tr><th>ID</th><th>User Story</th><th>Goal</th><th>Priority</th><th>SP</th></tr>
+  <tr>
+    <td>US-002</td>
+    <td>Sebagai <strong>Kasir</strong>, gue mau lihat menu dalam bentuk card gede yang touch-friendly</td>
+    <td>Milih item cepet tanpa bingung atau salah klik di layar sentuh</td>
+    <td>High</td><td>5</td>
+  </tr>
+  <tr>
+    <td>US-003</td>
+    <td>Sebagai <strong>Kasir</strong>, gue mau bikin open order baru dan tambahin item ke dalamnya</td>
+    <td>Proses pesanan dan bisa bayar belakangan kalau customer mau duduk dulu</td>
+    <td>High</td><td>8</td>
+  </tr>
+  <tr>
+    <td>US-004</td>
+    <td>Sebagai <strong>Kasir</strong>, gue mau kelola beberapa open order sekaligus</td>
+    <td>Handle banyak meja atau customer antre tanpa ada pesanan yang ketuker</td>
+    <td>High</td><td>8</td>
+  </tr>
+  <tr>
+    <td>US-005</td>
+    <td>Sebagai <strong>Kasir</strong>, gue mau pilih varian produk saat nambah item (hot/ice, size, add-on)</td>
+    <td>Harga yang masuk ke order udah sesuai pilihan customer, gak ada input manual</td>
+    <td>High</td><td>5</td>
+  </tr>
+  <tr>
+    <td>US-006</td>
+    <td>Sebagai <strong>Kasir</strong>, gue mau proses pembayaran via QRIS atau EDC</td>
+    <td>Terima berbagai metode bayar dari customer dengan cepet dan tercatat otomatis</td>
+    <td>High</td><td>8</td>
+  </tr>
+  <tr>
+    <td>US-007</td>
+    <td>Sebagai <strong>Kasir</strong>, gue mau konfirmasi pembayaran dan langsung complete order</td>
+    <td>Tutup transaksi dan lanjut ke customer berikutnya tanpa ribet</td>
+    <td>High</td><td>8</td>
+  </tr>
+  <tr>
+    <td>US-008</td>
+    <td>Sebagai <strong>Kasir</strong>, gue mau print struk otomatis setelah pembayaran dikonfirmasi</td>
+    <td>Customer langsung dapet bukti bayar tanpa kasir harus lakuin step tambahan</td>
+    <td>High</td><td>5</td>
+  </tr>
+  <tr>
+    <td>US-011</td>
+    <td>Sebagai <strong>Kasir</strong>, gue mau lihat update status order real-time tanpa refresh halaman</td>
+    <td>Tau progress dapur tanpa harus nanya-nanya atau refresh manual</td>
+    <td>High</td><td>5</td>
+  </tr>
+</table>
+
+<hr>
+<h2>Jira Cards</h2>
+<table border="1">
+  <tr><th>Jira ID</th><th>Task</th><th>User Story</th><th>Deskripsi</th><th>Priority</th><th>SP</th><th>Status</th><th>Figma</th></tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-3">KOMO-003</a></td>
+    <td>Menu card gede touch-friendly</td>
+    <td>US-002</td>
+    <td>Grid menu di layar kasir. Tiap item = card besar (gambar, nama, harga). Filter by kategori. Item habis stok = greyed out, tidak bisa di-tap.</td>
+    <td>High</td><td>5</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-003">figma/komo-003</a></td>
+  </tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-4">KOMO-004</a></td>
+    <td>Multi open order management</td>
+    <td>US-003, US-004</td>
+    <td>Kasir bisa bikin beberapa open order sekaligus. Switch antar order instan. Tiap order bisa diberi nama atau nomor meja. Bayar bisa belakangan.</td>
+    <td>High</td><td>8</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-004">figma/komo-004</a></td>
+  </tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-5">KOMO-005</a></td>
+    <td>Pilih varian dan modifier saat order</td>
+    <td>US-005</td>
+    <td>Tap item muncul modal pilih varian (hot/ice, size, add-on). Harga update live. Grup required wajib dipilih sebelum bisa add ke order.</td>
+    <td>High</td><td>5</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-005">figma/komo-005</a></td>
+  </tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-6">KOMO-006</a></td>
+    <td>Flow pembayaran QRIS dan EDC</td>
+    <td>US-006, US-007</td>
+    <td>Kasir pilih metode bayar. QRIS: tampil QR code untuk di-scan customer. EDC: tampil nominal, kasir konfirmasi manual setelah tap/swipe. Order auto-complete setelah konfirmasi.</td>
+    <td>High</td><td>8</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-006">figma/komo-006</a></td>
+  </tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-7">KOMO-007</a></td>
+    <td>Integrasi printer struk</td>
+    <td>US-008</td>
+    <td>Koneksi ke thermal printer USB atau network/IP. Auto print setelah bayar dikonfirmasi. Tombol reprint tersedia. Konten struk: nama outlet, items, total, metode bayar, timestamp.</td>
+    <td>High</td><td>5</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-007">figma/komo-007</a></td>
+  </tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-8">KOMO-008</a></td>
+    <td>Real-time order status via WebSocket</td>
+    <td>US-011</td>
+    <td>Koneksi WebSocket antara kasir dan dapur. Status order update langsung (New → In Progress → Ready → Done) tanpa perlu refresh halaman.</td>
+    <td>High</td><td>5</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-008">figma/komo-008</a></td>
+  </tr>
+</table>
+<p><strong>Total Story Points:</strong> 36</p>
+
+<hr>
+<h2>Detail Fitur</h2>
+
+<h3>Tampilan Menu (Grid Card)</h3>
+<p>Menu ditampilkan sebagai grid card besar yang nyaman di-tap dengan jari. Tiap card berisi: foto produk, nama produk, dan harga dasar. Ada filter kategori di bagian atas (contoh: Minuman, Makanan, Snack) untuk navigasi cepat. Produk yang habis stok tampil greyed out dan tidak bisa di-tap. Produk yang di-hide Manager tidak muncul sama sekali.</p>
+
+<h3>Open Order dan Multi-Order</h3>
+<p>Default flow adalah <strong>Open Order First</strong> — kasir bikin order dulu, customer bisa bayar kapan saja setelahnya. Kasir bisa punya beberapa open order aktif sekaligus, misalnya satu per meja atau per customer yang antre. Switch antar order dilakukan lewat tab atau list di bagian atas layar. Order tetap terbuka sampai pembayaran dikonfirmasi.</p>
+
+<h3>Varian dan Modifier</h3>
+<p>Saat item di-tap, muncul modal untuk pilih varian dan modifier. Varian adalah pilihan yang mengubah produk secara fundamental (contoh: suhu Hot/Ice, ukuran S/M/L). Modifier adalah add-on opsional (contoh: extra shot, oat milk, boba). Harga total update live di modal saat pilihan berubah. Grup varian yang ditandai required oleh Manager harus dipilih dulu sebelum item bisa ditambah ke order.</p>
+
+<h3>Pembayaran QRIS</h3>
+<p>Kasir tap tombol bayar, pilih QRIS. Sistem tampilkan QR code yang bisa di-scan customer pakai app apapun (GoPay, OVO, Dana, dll). Setelah scan dan bayar, kasir konfirmasi manual bahwa pembayaran sudah masuk, lalu order auto-complete.</p>
+
+<h3>Pembayaran EDC</h3>
+<p>Kasir tap tombol bayar, pilih EDC. Sistem tampilkan total yang harus dibayar. Kasir minta customer tap atau swipe kartu. Setelah mesin EDC approve, kasir tap konfirmasi di layar, order auto-complete.</p>
+
+<h3>Print Struk</h3>
+<p>Struk otomatis terprint ke thermal printer yang sudah terkoneksi (USB atau network IP) setelah bayar dikonfirmasi. Kalau printer tidak terkoneksi, muncul notifikasi error tapi order tetap selesai. Ada tombol reprint di halaman order history kalau struk perlu dicetak ulang.</p>
+
+<h3>Real-time Status WebSocket</h3>
+<p>Status order berubah otomatis di layar kasir mengikuti update dari dapur: New (baru dibuat), In Progress (dapur lagi proses), Ready (siap diambil/diantar), Done (selesai). Kalau koneksi WebSocket putus, ada indikator offline di layar dan sistem akan reconnect otomatis. Selama disconnect, status order tidak update tapi order tetap bisa dibuat dan diproses.</p>
+
+<h3>Hal yang Belum Dikonfirmasi</h3>
+<ul>
+  <li>Cash drawer — apakah perlu integrasi hardware atau tidak?</li>
+  <li>Apakah ada kebutuhan split bill (bayar dibagi beberapa orang)?</li>
+  <li>Discount dan promo — apakah masuk scope awal atau nanti?</li>
+</ul>
+</body>
+</html>

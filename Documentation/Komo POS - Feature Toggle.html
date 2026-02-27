@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Feature: Feature Toggle</title></head>
+<body>
+<h1>Feature: Feature Toggle</h1>
+<p><a href="Komo POS - Home.html">← Home</a></p>
+<hr>
+
+<h2>User Persona</h2>
+<h3>Owner</h3>
+<p>Tiap restoran punya kebutuhan yang berbeda. Kafe kecil gak butuh multi-outlet atau analytics kompleks. Food court butuh fitur yang berbeda dari fine dining. Owner mau bisa hide fitur yang tidak relevan supaya UI-nya gak overwhelming untuk timnya.</p>
+
+<hr>
+<h2>User Stories</h2>
+<table border="1">
+  <tr><th>ID</th><th>User Story</th><th>Goal</th><th>Priority</th><th>SP</th></tr>
+  <tr>
+    <td>US-019</td>
+    <td>Sebagai <strong>Owner</strong>, gue mau sembunyiin atau tampilin fitur-fitur tertentu di kasir maupun back-office</td>
+    <td>UI simpel dan gak overwhelming buat tim yang beda kebutuhannya</td>
+    <td>Medium</td><td>5</td>
+  </tr>
+</table>
+
+<hr>
+<h2>Jira Cards</h2>
+<table border="1">
+  <tr><th>Jira ID</th><th>Task</th><th>User Story</th><th>Deskripsi</th><th>Priority</th><th>SP</th><th>Status</th><th>Figma</th></tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-18">KOMO-018</a></td>
+    <td>Toggle fitur kasir dan back-office</td>
+    <td>US-019</td>
+    <td>Owner bisa hide/show modul tertentu (Analytics, Printer, Cash Drawer, dll) di kasir maupun back-office. Owner-only access. Perubahan apply langsung saat page di-reload.</td>
+    <td>Medium</td><td>5</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-018">figma/komo-018</a></td>
+  </tr>
+</table>
+<p><strong>Total Story Points:</strong> 5</p>
+
+<hr>
+<h2>Detail Fitur</h2>
+
+<h3>Modul yang Bisa Di-toggle</h3>
+<p>Di kasir:</p>
+<ul>
+  <li>Real-time order status (WebSocket ke dapur)</li>
+  <li>Print struk otomatis</li>
+  <li>Cash drawer integration</li>
+</ul>
+<p>Di back-office:</p>
+<ul>
+  <li>Analytics Dashboard</li>
+  <li>Multi-outlet management</li>
+  <li>Printer settings</li>
+</ul>
+
+<h3>Cara Kerja</h3>
+<p>Owner mengakses halaman Feature Toggle di Settings akun. Setiap modul ditampilkan dengan nama, deskripsi singkat, dan toggle switch. Kalau Owner hide suatu modul, modul tersebut tidak tampil di navigasi kasir atau back-office untuk semua user di semua outlet. Kalau show kembali, langsung muncul saat page di-reload. Fitur ini hanya bisa diakses Owner — Manager tidak bisa mengubah feature toggle.</p>
+
+<h3>Hal yang Perlu Dikonfirmasi</h3>
+<ul>
+  <li>Apakah feature toggle bisa diset berbeda per outlet?</li>
+  <li>Apakah ada notifikasi ke user lain kalau ada fitur yang baru di-enable atau di-disable?</li>
+</ul>
+</body>
+</html>

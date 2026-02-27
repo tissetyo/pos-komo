@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Feature: Auth dan Role Management</title></head>
+<body>
+<h1>Feature: Auth dan Role Management</h1>
+<p><a href="Komo POS - Home.html">← Home</a></p>
+<hr>
+
+<h2>User Persona</h2>
+<h3>Kasir</h3>
+<p>Orang yang ada di depan counter dan handle transaksi customer langsung. Butuh akses cepat ke POS tanpa ribet — login sekali, langsung bisa kerja. Gak perlu akses ke back-office atau analytics.</p>
+<h3>Manager</h3>
+<p>Ngurusin operasional harian. Bisa akses back-office untuk kelola produk, menu, dan tim. Tapi gak bisa ubah billing atau setting akun utama.</p>
+<h3>Owner</h3>
+<p>Akses penuh ke semua fitur termasuk konfigurasi system, feature toggle, dan laporan keuangan.</p>
+<h3>Dapur</h3>
+<p>Hanya bisa lihat antrian order yang masuk. Gak perlu akses ke kasir atau back-office.</p>
+
+<hr>
+<h2>User Stories</h2>
+<table border="1">
+  <tr><th>ID</th><th>User Story</th><th>Goal</th><th>Priority</th><th>SP</th></tr>
+  <tr>
+    <td>US-001</td>
+    <td>Sebagai <strong>Kasir</strong>, gue mau bisa login ke POS pakai email dan PIN</td>
+    <td>Akses fitur kasir aman sesuai role, orang lain gak bisa masuk ke akun gue</td>
+    <td>High</td><td>3</td>
+  </tr>
+  <tr>
+    <td>US-017</td>
+    <td>Sebagai <strong>Manager</strong>, gue mau kelola role user dan atur akses tiap role</td>
+    <td>Tiap orang cuma bisa akses fitur yang emang buat dia, gak lebih</td>
+    <td>High</td><td>5</td>
+  </tr>
+</table>
+
+<hr>
+<h2>Jira Cards</h2>
+<table border="1">
+  <tr><th>Jira ID</th><th>Task</th><th>User Story</th><th>Deskripsi</th><th>Priority</th><th>SP</th><th>Status</th><th>Figma</th></tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-1">KOMO-001</a></td>
+    <td>Login screen kasir</td>
+    <td>US-001</td>
+    <td>Halaman login POS. Input email + PIN. Validasi role sebelum redirect ke dashboard kasir.</td>
+    <td>High</td><td>3</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-001">figma/komo-001</a></td>
+  </tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-2">KOMO-002</a></td>
+    <td>Role management CRUD</td>
+    <td>US-017</td>
+    <td>Fitur di back-office buat bikin, edit, hapus role. Tiap role punya set permission sendiri yang bisa dikustomisasi.</td>
+    <td>High</td><td>5</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-002">figma/komo-002</a></td>
+  </tr>
+</table>
+<p><strong>Total Story Points:</strong> 8</p>
+
+<hr>
+<h2>Detail Fitur</h2>
+
+<h3>Login dan Session</h3>
+<p>Halaman login adalah screen pertama yang muncul saat POS dibuka. User masukkan email dan PIN (bukan password panjang — kasir butuh input cepat). Setelah berhasil, sistem validasi role lalu redirect ke dashboard sesuai role. Session bertahan sampai kasir logout manual atau session expired.</p>
+<p><strong>Edge cases yang perlu dihandle:</strong></p>
+<ul>
+  <li>PIN salah 5x — lock akun sementara, notifikasi ke Manager</li>
+  <li>Session expired saat lagi di tengah order — simpan draft order, minta login ulang</li>
+  <li>User yang di-deactivate — langsung logout saat next request</li>
+</ul>
+
+<h3>Role dan Permission</h3>
+<p>Role bawaan yang tersedia:</p>
+<ul>
+  <li><strong>Owner</strong> — akses penuh, termasuk billing, feature toggle, dan hapus outlet</li>
+  <li><strong>Manager</strong> — kelola produk, menu, outlet, user, dan lihat analytics</li>
+  <li><strong>Kasir</strong> — akses ke layar kasir saja, tidak bisa masuk back-office</li>
+  <li><strong>Dapur</strong> — hanya lihat antrian order, tidak bisa bikin atau edit order</li>
+</ul>
+<p>Manager bisa bikin custom role dengan kombinasi permission yang berbeda. Role di-assign per user per outlet — satu user bisa jadi Manager di Outlet A tapi Kasir di Outlet B. Perubahan role berlaku saat session berikutnya (login ulang).</p>
+
+<h3>Hal yang Perlu Dikonfirmasi</h3>
+<ul>
+  <li>Apakah PIN bisa diganti sendiri oleh kasir, atau harus lewat Manager?</li>
+  <li>Apakah ada SSO / login via Google yang direncanakan?</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Feature: Multi Outlet</title></head>
+<body>
+<h1>Feature: Multi Outlet</h1>
+<p><a href="Komo POS - Home.html">← Home</a></p>
+<hr>
+
+<h2>User Persona</h2>
+<h3>Owner</h3>
+<p>Punya lebih dari satu toko dan mau kelola semuanya dari satu tempat tanpa harus login-logout berganti akun. Butuh bisa lihat performa tiap outlet secara terpisah sekaligus secara total.</p>
+<h3>Manager</h3>
+<p>Bisa di-assign ke satu atau beberapa outlet. Hanya bisa akses dan kelola outlet yang di-assign ke dia.</p>
+
+<hr>
+<h2>User Stories</h2>
+<table border="1">
+  <tr><th>ID</th><th>User Story</th><th>Goal</th><th>Priority</th><th>SP</th></tr>
+  <tr>
+    <td>US-015</td>
+    <td>Sebagai <strong>Owner</strong>, gue mau bikin dan kelola beberapa outlet dalam satu akun</td>
+    <td>Operasiin banyak toko dari satu dashboard aja, gak perlu akun terpisah</td>
+    <td>High</td><td>8</td>
+  </tr>
+  <tr>
+    <td>US-016</td>
+    <td>Sebagai <strong>Manager</strong>, gue mau assign produk dari katalog pusat ke outlet tertentu</td>
+    <td>Gak perlu input ulang produk yang sama di tiap outlet baru</td>
+    <td>High</td><td>8</td>
+  </tr>
+</table>
+
+<hr>
+<h2>Jira Cards</h2>
+<table border="1">
+  <tr><th>Jira ID</th><th>Task</th><th>User Story</th><th>Deskripsi</th><th>Priority</th><th>SP</th><th>Status</th><th>Figma</th></tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-14">KOMO-014</a></td>
+    <td>Multi-outlet setup dan assign produk</td>
+    <td>US-015, US-016</td>
+    <td>Owner bisa bikin outlet baru (nama, alamat, timezone). Produk dari katalog pusat bisa di-assign ke outlet tertentu. Revenue dan transaksi dicatat per outlet.</td>
+    <td>High</td><td>8</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-014">figma/komo-014</a></td>
+  </tr>
+</table>
+<p><strong>Total Story Points:</strong> 8</p>
+
+<hr>
+<h2>Detail Fitur</h2>
+
+<h3>Setup Outlet Baru</h3>
+<p>Owner bisa bikin outlet baru dari halaman pengaturan akun. Field yang diperlukan: nama outlet (wajib), alamat lengkap (wajib), kota, dan timezone. Setelah outlet dibuat, Owner mendapat URL kasir khusus untuk outlet tersebut yang bisa diakses di device kasir.</p>
+
+<h3>Katalog Produk Terpusat</h3>
+<p>Semua produk tersimpan di katalog pusat yang shared di semua outlet. Saat outlet baru dibuat, Manager bisa pilih produk mana saja dari katalog pusat yang mau ditampilkan di outlet tersebut. Kalau ada produk baru ditambahkan ke katalog, produk tersebut tidak otomatis tampil di semua outlet — harus di-assign dulu secara manual ke outlet yang mau menampilkannya.</p>
+
+<h3>Stok per Outlet</h3>
+<p>Stok dicatat terpisah per outlet. Kalau stok Outlet A habis, Outlet B tidak terpengaruh.</p>
+
+<h3>Akses dan Permission per Outlet</h3>
+<p>User bisa di-assign ke satu atau beberapa outlet dengan role yang berbeda di tiap outlet. Contoh: seorang user bisa jadi Manager di Outlet A (akses penuh back-office) tapi hanya Kasir di Outlet B (akses kasir saja). Owner selalu punya akses ke semua outlet.</p>
+</body>
+</html>

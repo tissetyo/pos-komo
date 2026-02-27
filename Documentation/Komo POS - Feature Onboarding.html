@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Feature: Onboarding</title></head>
+<body>
+<h1>Feature: Onboarding</h1>
+<p><a href="Komo POS - Home.html">← Home</a></p>
+<hr>
+
+<h2>User Persona</h2>
+<h3>Owner Baru</h3>
+<p>Baru daftar dan belum pernah pakai sistem POS seperti ini sebelumnya. Atau mungkin pernah pakai StoreHub tapi mau pindah ke Komo. Butuh guidance yang jelas step-by-step. Gak mau dibombardir dengan semua opsi sekaligus. Mau cepat bisa pakai — target: bisa mulai transaksi pertama dalam 15-20 menit setelah daftar.</p>
+
+<hr>
+<h2>User Stories</h2>
+<table border="1">
+  <tr><th>ID</th><th>User Story</th><th>Goal</th><th>Priority</th><th>SP</th></tr>
+  <tr>
+    <td>US-020</td>
+    <td>Sebagai <strong>Owner Baru</strong>, gue mau ada flow onboarding waktu pertama kali setup POS</td>
+    <td>Bisa konfigurasi resto dari awal dan pilih fitur yang mau dipakai tanpa bingung</td>
+    <td>High</td><td>8</td>
+  </tr>
+  <tr>
+    <td>US-021</td>
+    <td>Sebagai <strong>Owner Baru</strong>, gue mau connect printer struk pas lagi onboarding</td>
+    <td>Langsung bisa print struk begitu setup selesai, tanpa perlu cari-cari setting lagi</td>
+    <td>Medium</td><td>3</td>
+  </tr>
+</table>
+
+<hr>
+<h2>Jira Cards</h2>
+<table border="1">
+  <tr><th>Jira ID</th><th>Task</th><th>User Story</th><th>Deskripsi</th><th>Priority</th><th>SP</th><th>Status</th><th>Figma</th></tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-16">KOMO-016</a></td>
+    <td>Flow onboarding pertama kali setup</td>
+    <td>US-020</td>
+    <td>Wizard step-by-step: info resto, pilih fitur, setup outlet pertama, import menu opsional. Progress tersimpan tiap step — kalau interrupt bisa dilanjut dari langkah terakhir.</td>
+    <td>High</td><td>8</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-016">figma/komo-016</a></td>
+  </tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-17">KOMO-017</a></td>
+    <td>Setup printer di onboarding</td>
+    <td>US-021</td>
+    <td>Step opsional di onboarding untuk konektin dan test thermal printer (USB atau network). Bisa di-skip dan diatur ulang nanti di settings.</td>
+    <td>Medium</td><td>3</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-017">figma/komo-017</a></td>
+  </tr>
+</table>
+<p><strong>Total Story Points:</strong> 11</p>
+
+<hr>
+<h2>Detail Fitur</h2>
+
+<h3>Step 1 — Info Resto</h3>
+<p>Owner mengisi informasi dasar restoran: nama outlet, alamat, kota, timezone, dan tipe restoran (Kafe, Restoran, Food Court, Cloud Kitchen, dll). Tipe restoran digunakan untuk suggest fitur yang relevan di langkah berikutnya.</p>
+
+<h3>Step 2 — Pilih Fitur</h3>
+<p>Owner diperlihatkan daftar modul yang tersedia dengan penjelasan singkat masing-masing. Default: semua fitur utama aktif. Owner bisa uncheck fitur yang tidak dibutuhkan (contoh: kalau gak butuh analytics, bisa uncheck). Pilihan ini bisa diubah kapan saja nanti lewat Feature Toggle settings.</p>
+
+<h3>Step 3 — Setup Outlet Pertama</h3>
+<p>Outlet pertama sudah otomatis dibuat berdasarkan info di Step 1. Owner diminta konfirmasi atau edit detailnya. Juga bisa setup jam operasional outlet di langkah ini.</p>
+
+<h3>Step 4 — Import Menu (Opsional)</h3>
+<p>Owner punya pilihan untuk import produk dari file CSV atau Excel, atau tambah produk manual satu per satu, atau skip dulu dan tambah nanti. Kalau import CSV, ada template yang bisa didownload sebagai contoh format yang benar.</p>
+
+<h3>Step 5 — Setup Printer (Opsional)</h3>
+<p>Owner bisa konektin thermal printer di step ini. Sistem tampilkan panduan deteksi printer berdasarkan tipe koneksi (USB atau Network/IP). Ada tombol "Test Print" untuk verifikasi. Step ini bisa di-skip — printer bisa disetup nanti di Settings kasir.</p>
+
+<h3>Selesai</h3>
+<p>Setelah semua step selesai (atau di-skip), Owner diarahkan ke dashboard back-office dengan summary apa yang sudah di-setup. Ada checklist "Langkah Berikutnya" untuk hal-hal yang belum dikerjakan (misal: tambah kasir, lengkapi menu).</p>
+
+<h3>Resume Onboarding</h3>
+<p>Kalau Owner menutup browser atau logout di tengah onboarding, progress tersimpan. Saat login berikutnya, Owner otomatis diarahkan ke step terakhir yang belum selesai.</p>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Feature: Analytics Dashboard</title></head>
+<body>
+<h1>Feature: Analytics Dashboard</h1>
+<p><a href="Komo POS - Home.html">← Home</a></p>
+<hr>
+
+<h2>User Persona</h2>
+<h3>Owner</h3>
+<p>Mau pantau performa bisnis dengan mudah tanpa harus export spreadsheet atau minta laporan ke Manager. Butuh angka yang langsung bisa dibaca dan dipahami — bukan dashboard yang penuh grafik tapi gak jelas maknanya. Sering cek dari HP saat lagi di luar.</p>
+<h3>Manager</h3>
+<p>Butuh data untuk keputusan operasional harian — produk mana yang laris, jam-jam puncak, performa per outlet.</p>
+
+<hr>
+<h2>User Stories</h2>
+<table border="1">
+  <tr><th>ID</th><th>User Story</th><th>Goal</th><th>Priority</th><th>SP</th></tr>
+  <tr>
+    <td>US-018</td>
+    <td>Sebagai <strong>Owner</strong>, gue mau lihat dashboard revenue di back-office</td>
+    <td>Pantau performa penjualan tiap outlet dengan gampang, gak perlu minta laporan manual</td>
+    <td>High</td><td>8</td>
+  </tr>
+</table>
+
+<hr>
+<h2>Jira Cards</h2>
+<table border="1">
+  <tr><th>Jira ID</th><th>Task</th><th>User Story</th><th>Deskripsi</th><th>Priority</th><th>SP</th><th>Status</th><th>Figma</th></tr>
+  <tr>
+    <td><a href="https://poscloud.atlassian.net/browse/KOMO-15">KOMO-015</a></td>
+    <td>Dashboard revenue back-office</td>
+    <td>US-018</td>
+    <td>Dashboard menampilkan total revenue, jumlah order, avg order value, top 5 produk, dan tren harian. Filter by outlet dan rentang tanggal (Hari ini, Minggu ini, Bulan ini, Custom).</td>
+    <td>High</td><td>8</td><td>To Do</td>
+    <td><a href="https://figma.com/komo-015">figma/komo-015</a></td>
+  </tr>
+</table>
+<p><strong>Total Story Points:</strong> 8</p>
+
+<hr>
+<h2>Detail Fitur</h2>
+
+<h3>Metrik Utama yang Ditampilkan</h3>
+<ul>
+  <li><strong>Total Revenue</strong> — total pendapatan dalam periode yang dipilih</li>
+  <li><strong>Jumlah Order</strong> — total transaksi selesai (tidak termasuk order yang dibatalkan)</li>
+  <li><strong>Average Order Value</strong> — rata-rata nilai per transaksi</li>
+  <li><strong>Top 5 Produk</strong> — produk dengan revenue tertinggi dalam periode</li>
+  <li><strong>Tren Harian</strong> — grafik sederhana revenue per hari dalam periode yang dipilih</li>
+</ul>
+
+<h3>Filter</h3>
+<p>Owner bisa filter data berdasarkan outlet (semua outlet atau satu outlet tertentu) dan rentang tanggal. Preset tersedia: Hari ini, Kemarin, Minggu ini, Bulan ini. Ada juga pilihan Custom untuk range tanggal bebas. Data refresh otomatis setiap 5 menit.</p>
+
+<h3>Prinsip Desain Dashboard</h3>
+<p>Dashboard ini sengaja dibuat simpel dan mudah dibaca — bukan penuh widget dan grafik yang membingungkan. Fokus ke angka-angka yang paling sering dibutuhkan Owner untuk keputusan harian. Fase lanjutan bisa tambah metrik lebih detail kalau memang dibutuhkan berdasarkan feedback pengguna.</p>
+
+<h3>Hal yang Belum Dikonfirmasi</h3>
+<ul>
+  <li>Apakah data bisa di-export ke CSV atau Excel?</li>
+  <li>Apakah Owner butuh notifikasi kalau revenue turun drastis?</li>
+  <li>Laporan per shift kasir — apakah ini perlu di fase awal?</li>
+</ul>
+</body>
+</html>

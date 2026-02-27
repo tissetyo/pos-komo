@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Komo POS - Roadmap</title></head>
+<body>
+<h1>Roadmap</h1>
+<p><a href="Komo POS - Home.html">← Home</a></p>
+<hr>
+
+<h2>Phase 1 — Core POS (Prioritas Sekarang)</h2>
+<p>Fitur dasar kasir dan back-office yang harus ada sebelum bisa dipakai.</p>
+<ul>
+  <li>Login dan session management per role</li>
+  <li>Tampilan menu kasir — card touch-friendly</li>
+  <li>Buat dan kelola open order (multi-order)</li>
+  <li>Pilih varian dan modifier produk</li>
+  <li>Pembayaran QRIS dan EDC</li>
+  <li>Print struk otomatis</li>
+  <li>CRUD produk di back-office</li>
+  <li>Varian dan modifier produk</li>
+  <li>Role management (Owner, Manager, Kasir, Dapur)</li>
+</ul>
+<p><strong>Jira Epic:</strong> Auth &amp; Role, Kasir POS, Produk</p>
+<p><strong>Total SP Phase 1:</strong> 41</p>
+
+<h2>Phase 2 — Offline Mode dan Realtime</h2>
+<p>Operasional tetap jalan tanpa internet, update real-time antara kasir dan dapur.</p>
+<ul>
+  <li>Offline order dengan IndexedDB</li>
+  <li>Auto sync dan manual sync saat reconnect</li>
+  <li>WebSocket real-time order status</li>
+</ul>
+<p><strong>Jira Epic:</strong> Offline Mode</p>
+<p><strong>Total SP Phase 2:</strong> 21</p>
+
+<h2>Phase 3 — Multi-outlet dan Analytics</h2>
+<p>Kelola banyak toko, pantau performa bisnis.</p>
+<ul>
+  <li>Setup multi-outlet dari satu akun</li>
+  <li>Assign produk per outlet</li>
+  <li>Toggle visibilitas produk per outlet</li>
+  <li>Dashboard revenue (total, top produk, tren harian)</li>
+</ul>
+<p><strong>Jira Epic:</strong> Outlet, Analytics, Produk (toggle)</p>
+<p><strong>Total SP Phase 3:</strong> 22</p>
+
+<h2>Phase 4 — Onboarding dan Feature Toggle</h2>
+<p>First impression yang baik untuk user baru, dan fleksibilitas konfigurasi tampilan.</p>
+<ul>
+  <li>Setup wizard step-by-step</li>
+  <li>Setup printer di onboarding</li>
+  <li>Show/hide fitur per tipe resto</li>
+</ul>
+<p><strong>Jira Epic:</strong> Onboarding, Feature Toggle</p>
+<p><strong>Total SP Phase 4:</strong> 16</p>
+
+<h2>Phase 5 — Integrasi dan Design System (Later)</h2>
+<p>Integrasi pihak ketiga, design system final, migrasi Komo bertahap.</p>
+<ul>
+  <li>Third-party integrations (delivery, loyalty, dll)</li>
+  <li>Design system finalisasi</li>
+  <li>Migrasi data Komo existing</li>
+  <li>Cash drawer — perlu konfirmasi kebutuhan dulu</li>
+</ul>
+<p><strong>Total SP Phase 5:</strong> TBD</p>
+
+<hr>
+<h2>Summary Jira Board</h2>
+<p><strong>JQL semua task:</strong> project = KOMO ORDER BY priority DESC</p>
+<p><strong>JQL Phase 1:</strong> project = KOMO AND labels IN (Auth-Role, Kasir-POS, Produk) ORDER BY priority DESC</p>
+<table border="1">
+  <tr><th>Epic</th><th>Task</th><th>SP</th></tr>
+  <tr><td>Auth &amp; Role</td><td>KOMO-001, KOMO-002</td><td>8</td></tr>
+  <tr><td>Kasir POS</td><td>KOMO-003 s/d KOMO-008</td><td>36</td></tr>
+  <tr><td>Offline Mode</td><td>KOMO-009, KOMO-010</td><td>16</td></tr>
+  <tr><td>Produk</td><td>KOMO-011, KOMO-012, KOMO-013</td><td>16</td></tr>
+  <tr><td>Outlet</td><td>KOMO-014</td><td>8</td></tr>
+  <tr><td>Analytics</td><td>KOMO-015</td><td>8</td></tr>
+  <tr><td>Onboarding</td><td>KOMO-016, KOMO-017</td><td>11</td></tr>
+  <tr><td>Feature Toggle</td><td>KOMO-018</td><td>5</td></tr>
+  <tr><td><strong>Total</strong></td><td><strong>18 tasks</strong></td><td><strong>104</strong></td></tr>
+</table>
+</body>
+</html>

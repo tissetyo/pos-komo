@@ -15,6 +15,9 @@ const handleLogin = () => {
     navigateTo('/cashier')
     loading.value = false
   }, 800)
+}
+</script>
+
 <template>
   <div class="max-w-[400px] w-full p-8 bg-white dark:bg-gray-900 rounded-[2rem] shadow-xl flex flex-col gap-6 border border-gray-100 dark:border-gray-800 transition-all duration-300">
     <div class="text-center">

@@ -1,5 +1,8 @@
 <script setup lang="ts">
-// Layout for Backoffice interface
+const handleLogout = () => {
+  localStorage.removeItem('isAuthenticated')
+  navigateTo('/login')
+}
 </script>
 
 <template>
@@ -7,7 +10,7 @@
     <!-- Sidebar -->
     <aside class="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm z-10 flex-shrink-0">
       <div class="h-16 flex items-center px-6 border-b border-gray-100">
-        <div class="flex items-center gap-3 font-semibold text-lg text-gray-900">
+        <div class="flex items-center gap-3 font-semibold text-lg text-gray-900 cursor-pointer" @click="navigateTo('/cashier')">
           <UIcon name="i-lucide-box" class="w-6 h-6 text-primary" />
           Komo POS
         </div>
@@ -15,18 +18,18 @@
       
       <div class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
         <div class="text-xs font-medium text-gray-400 px-3 uppercase tracking-wider mb-2 mt-2">Overview</div>
-        <UButton label="Dashboard" icon="i-lucide-layout-dashboard" color="gray" variant="ghost" class="w-full justify-start rounded-lg" />
-        <UButton label="Analytics" icon="i-lucide-line-chart" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
-        <UButton label="Transactions" icon="i-lucide-receipt" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
+        <UButton to="/backoffice" label="Dashboard" icon="i-lucide-layout-dashboard" color="gray" variant="ghost" class="w-full justify-start rounded-lg" />
+        <UButton to="/backoffice/sales-report" label="Analytics" icon="i-lucide-line-chart" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
+        <UButton to="/backoffice/transactions" label="Transactions" icon="i-lucide-receipt" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
         
         <div class="text-xs font-medium text-gray-400 px-3 uppercase tracking-wider mb-2 mt-6">Management</div>
-        <UButton label="Products" icon="i-lucide-package" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
-        <UButton label="Customers" icon="i-lucide-users" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
-        <UButton label="Employees" icon="i-lucide-user-cog" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
+        <UButton to="/backoffice/products" label="Products" icon="i-lucide-package" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
+        <UButton to="/backoffice/customers" label="Customers" icon="i-lucide-users" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
+        <UButton to="/backoffice/employees" label="Employees" icon="i-lucide-user-cog" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
         
         <div class="text-xs font-medium text-gray-400 px-3 uppercase tracking-wider mb-2 mt-6">System</div>
-        <UButton label="Multi-Outlet" icon="i-lucide-store" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
-        <UButton label="Settings" icon="i-lucide-settings" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
+        <UButton to="/cashier" label="Back to POS" icon="i-lucide-monitor" color="primary" variant="soft" class="w-full justify-start rounded-lg font-semibold" />
+        <UButton to="/backoffice/settings" label="Settings" icon="i-lucide-settings" color="gray" variant="ghost" class="w-full justify-start rounded-lg text-gray-500" />
       </div>
 
       <div class="p-4 border-t border-gray-100">
@@ -36,7 +39,7 @@
             <p class="text-sm font-medium text-gray-900 truncate">Owner Account</p>
             <p class="text-xs text-gray-500 truncate">Admin</p>
           </div>
-          <UButton icon="i-lucide-log-out" color="gray" variant="ghost" size="xs" />
+          <UButton icon="i-lucide-log-out" color="gray" variant="ghost" size="xs" @click="handleLogout" />
         </div>
       </div>
     </aside>

@@ -93,9 +93,10 @@ const clearOrder = () => orderItems.value = []
             v-for="cat in categories"
             :key="cat"
             :label="cat"
-            :color="activeCategory === cat ? 'primary' : 'gray'"
-            :variant="activeCategory === cat ? 'solid' : 'soft'"
-            class="rounded-full px-5 py-2 font-medium whitespace-nowrap"
+            :color="activeCategory === cat ? 'primary' : 'white'"
+            :variant="'solid'"
+            class="rounded-full px-5 py-2 font-medium whitespace-nowrap transition-colors"
+            :class="activeCategory === cat ? 'text-white' : 'text-gray-700 hover:bg-gray-50 ring-1 ring-inset ring-gray-200'"
             @click="activeCategory = cat"
           />
         </div>
@@ -226,6 +227,9 @@ const clearOrder = () => orderItems.value = []
         </div>
       </div>
     </div>
+
+    <!-- Onboarding Modal -->
+    <OnboardingSetup />
   </div>
 </template>
 

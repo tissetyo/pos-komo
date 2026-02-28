@@ -1,6 +1,14 @@
 <script setup lang="ts">
 const client = useSupabaseClient()
 const user = useSupabaseUser()
+const outlet = ref<any>(null)
+
+onMounted(async () => {
+  if (user.value) {
+    const { data } = await client.from('profiles').select('*, outlets(*)').eq('id', user.value.id).single()
+    outlet.value = data?.outlets || null
+  }
+})
 
 const handleLogout = async () => {
   await client.auth.signOut()
@@ -12,11 +20,14 @@ const handleLogout = async () => {
   <div class="h-screen w-screen bg-gray-100 flex flex-col overflow-hidden font-sans">
     <!-- Top Navigation Bar -->
     <header class="h-14 bg-[#1E293B] flex items-center justify-between px-4 shrink-0 z-20">
-      <!-- Left: Logo + Search -->
+      <!-- Left: Logo + Store Name + Search -->
       <div class="flex items-center gap-4">
         <div class="flex items-center gap-2 cursor-pointer" @click="navigateTo('/cashier')">
           <UIcon name="i-lucide-box" class="w-6 h-6 text-white" />
-          <span class="font-bold text-white text-lg">May POS</span>
+          <div class="flex flex-col leading-tight">
+            <span class="font-bold text-white text-sm">{{ outlet?.name || 'My Store' }}</span>
+            <span class="text-gray-400 text-[10px]">Point of Sale</span>
+          </div>
         </div>
         <div class="relative ml-4">
           <UIcon name="i-lucide-search" class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -28,15 +39,10 @@ const handleLogout = async () => {
         </div>
       </div>
 
-      <!-- Right: Table selector + User + Icons -->
+      <!-- Right: User + Icons -->
       <div class="flex items-center gap-3">
-        <button class="bg-emerald-500 text-white px-4 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2 hover:bg-emerald-600 transition-colors">
-          <UIcon name="i-lucide-utensils-crossed" class="w-4 h-4" />
-          Table #4 <UIcon name="i-lucide-chevron-down" class="w-3 h-3" />
-        </button>
-
         <div class="flex items-center gap-2 ml-2">
-          <span class="text-white text-sm font-medium">{{ user?.email?.split('@')[0] || 'Alex M.' }}</span>
+          <span class="text-white text-sm font-medium">{{ user?.email?.split('@')[0] || 'Cashier' }}</span>
           <UAvatar :alt="user?.email || 'Cashier'" size="sm" class="ring-2 ring-white/20" />
         </div>
         <UButton icon="i-lucide-bell" color="neutral" variant="ghost" class="text-white hover:bg-white/10" />

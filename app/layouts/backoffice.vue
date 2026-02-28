@@ -2,8 +2,7 @@
 const client = useSupabaseClient()
 const user = useSupabaseUser()
 const profile = ref<any>(null)
-const outlets = ref<any[]>([])
-const selectedOutlet = ref('')
+const outlet = ref<any>(null)
 const reportsOpen = ref(false)
 
 onMounted(async () => {
@@ -14,15 +13,7 @@ onMounted(async () => {
       .eq('id', user.value.id)
       .single()
     profile.value = data
-
-    const { data: outletList } = await client
-      .from('outlets')
-      .select('id, name')
-      .order('created_at')
-    outlets.value = outletList || []
-    if (outlets.value.length > 0) {
-      selectedOutlet.value = outlets.value[0].name
-    }
+    outlet.value = data?.outlets || null
   }
 })
 
@@ -42,9 +33,9 @@ const breadcrumb = computed(() => {
 const navItems = [
   { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/backoffice' },
   { label: 'Transactions', icon: 'i-lucide-receipt', to: '/backoffice/transactions' },
-  { label: 'Customers', icon: 'i-lucide-users', to: '/backoffice/customers' },
   { label: 'Products', icon: 'i-lucide-package', to: '/backoffice/products' },
-  { label: 'Employeess', icon: 'i-lucide-user-cog', to: '/backoffice/employees' },
+  { label: 'Customers', icon: 'i-lucide-users', to: '/backoffice/customers' },
+  { label: 'Employees', icon: 'i-lucide-user-cog', to: '/backoffice/employees' },
   { label: 'Settings', icon: 'i-lucide-settings', to: '/backoffice/settings' },
 ]
 
@@ -56,14 +47,16 @@ const reportItems = [
 
 <template>
   <div class="h-screen w-screen bg-gray-50 flex font-sans overflow-hidden">
-    <!-- Sidebar — always dark navy -->
+    <!-- Sidebar -->
     <aside class="w-56 bg-[#1E293B] flex flex-col flex-shrink-0 z-10">
-      <!-- Branding -->
+      <!-- Branding — shows real outlet name -->
       <div class="h-16 flex items-center px-5 border-b border-white/10">
         <div class="flex items-center gap-2 cursor-pointer" @click="navigateTo('/')">
           <UIcon name="i-lucide-box" class="w-6 h-6 text-white" />
-          <span class="font-bold text-white text-lg">May POS</span>
-          <span class="text-gray-400 text-sm font-normal ml-0.5">Backoffice</span>
+          <div class="flex flex-col leading-tight min-w-0">
+            <span class="font-bold text-white text-sm truncate">{{ outlet?.name || 'My Store' }}</span>
+            <span class="text-gray-400 text-[10px] font-normal">Backoffice</span>
+          </div>
         </div>
       </div>
 
@@ -75,7 +68,7 @@ const reportItems = [
           :to="item.to"
           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
           :class="[
-            route.path === item.to
+            route.path === item.to || (item.to !== '/backoffice' && route.path.startsWith(item.to))
               ? 'bg-white/10 text-white'
               : 'text-gray-400 hover:bg-white/5 hover:text-white'
           ]"
@@ -117,7 +110,7 @@ const reportItems = [
         </div>
       </nav>
 
-      <!-- User / Logout at bottom -->
+      <!-- Bottom -->
       <div class="p-4 border-t border-white/10">
         <NuxtLink to="/cashier" class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-emerald-400 hover:bg-white/5 transition-colors mb-2">
           <UIcon name="i-lucide-monitor" class="w-5 h-5" />
@@ -139,7 +132,7 @@ const reportItems = [
           <UButton icon="i-lucide-bell" color="neutral" variant="ghost" />
           <div class="flex items-center gap-2 cursor-pointer" @click="handleLogout" title="Click to Logout">
             <UIcon name="i-lucide-user" class="w-4 h-4 text-gray-400" />
-            <span class="text-sm font-medium text-gray-700">{{ profile?.full_name || user?.email || 'Hiro Saleh' }}</span>
+            <span class="text-sm font-medium text-gray-700">{{ profile?.full_name || user?.email || 'User' }}</span>
             <UIcon name="i-lucide-chevron-down" class="w-4 h-4 text-gray-400" />
           </div>
         </div>
@@ -152,7 +145,7 @@ const reportItems = [
 
       <!-- Footer -->
       <footer class="py-4 text-center text-xs text-gray-400 border-t border-gray-100">
-        © 2026 May POS Systems. All rights reserved.
+        © 2026 {{ outlet?.name || 'POS' }} Systems. All rights reserved.
       </footer>
     </main>
   </div>

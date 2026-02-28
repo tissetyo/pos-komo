@@ -1,69 +1,138 @@
 <script setup lang="ts">
-definePageMeta({
-  layout: 'backoffice'
-})
+definePageMeta({ layout: 'backoffice' })
 
 const client = useSupabaseClient()
 const user = useSupabaseUser()
-const dateRange = ref('Today')
+const dateRange = ref<'Today' | 'This Week' | 'This Month'>('Today')
+const loading = ref(true)
+const outletId = ref<string | null>(null)
 
-const metrics = ref([
-  { label: 'Total Sales', value: 'RM 8,175.88', trend: '-3.15%', trendDir: 'down', change: '(-RM 265.99)', sub: 'Sales Report', icon: 'i-lucide-dollar-sign', iconBg: 'bg-blue-50', iconColor: 'text-blue-600' },
-  { label: 'Total New Customers', value: '19', trend: '+5.56%', trendDir: 'up', change: '(+1)', sub: 'Loyalty Report', icon: 'i-lucide-user-plus', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
-  { label: 'Total Transactions', value: '429', trend: '-13.51%', trendDir: 'down', change: '(-67)', sub: '', icon: 'i-lucide-receipt', iconBg: 'bg-purple-50', iconColor: 'text-purple-600' },
-  { label: 'Avg. Order Value', value: 'RM 19.06', trend: '+11.97%', trendDir: 'up', change: '(+RM 2.04)', sub: '', icon: 'i-lucide-calculator', iconBg: 'bg-orange-50', iconColor: 'text-orange-600' }
-])
+// Real data refs
+const totalSales = ref(0)
+const totalTransactions = ref(0)
+const avgOrderValue = ref(0)
+const newCustomers = ref(0)
+const bestSellers = ref<any[]>([])
+const channelBreakdown = ref<{ label: string; count: number; total: number }[]>([])
+const recentOrders = ref<any[]>([])
 
-const loadingMetrics = ref(true)
-const recentTransactions = ref<any[]>([])
+// Date helpers
+const getDateRange = (range: string) => {
+  const now = new Date()
+  const start = new Date()
+  if (range === 'Today') {
+    start.setHours(0, 0, 0, 0)
+  } else if (range === 'This Week') {
+    start.setDate(now.getDate() - now.getDay())
+    start.setHours(0, 0, 0, 0)
+  } else {
+    start.setDate(1)
+    start.setHours(0, 0, 0, 0)
+  }
+  return start.toISOString()
+}
 
-const storeChannels = ref([
-  { name: 'Main Street Cafe', offline: 'RM 4,230.50', qr: 'RM 850.00', total: 'RM 5,080.50' },
-  { name: 'Downtown Kiosk', offline: 'RM 1,230.50', qr: 'RM 250.00', total: 'RM 5,080.50' },
-  { name: 'Mall Branch', offline: 'RM 1,230.50', qr: 'RM 250.00', total: 'RM 5,080.50' },
-])
+const fetchDashboardData = async () => {
+  if (!user.value) { loading.value = false; return }
+  loading.value = true
 
-const bestSellers = ref([
-  { name: 'Signature Latte', category: 'Beverages', sold: 142, trend: '+12% vs last week', color: 'bg-red-100 text-red-600' },
-  { name: 'Croissant Butter', category: 'Pastry', sold: 98, trend: '+5% vs last week', color: 'bg-amber-100 text-amber-600' },
-  { name: 'Chicken Sandwich', category: 'Food', sold: 76, trend: '-2% vs last week', color: 'bg-green-100 text-green-600' },
-])
-
-onMounted(async () => {
-  // Load real data if available
-  if (!user.value) { loadingMetrics.value = false; return }
   try {
     const { data: profile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
-    if (!profile?.outlet_id) return
+    outletId.value = profile?.outlet_id || null
+    if (!outletId.value) { loading.value = false; return }
 
+    const startDate = getDateRange(dateRange.value)
+
+    // 1. Orders in date range
     const { data: orders } = await client
       .from('orders')
-      .select('id, total, payment_method, payment_status, order_status, created_at, receipt_number')
-      .eq('outlet_id', profile.outlet_id)
+      .select('id, total, payment_method, order_type, payment_status, created_at, receipt_number')
+      .eq('outlet_id', outletId.value)
       .eq('payment_status', 'paid')
+      .gte('created_at', startDate)
       .order('created_at', { ascending: false })
 
-    if (orders && orders.length > 0) {
-      const totalRevenue = orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0)
-      metrics.value[0].value = 'RM ' + totalRevenue.toLocaleString('en-MY', { minimumFractionDigits: 2 })
-      metrics.value[2].value = orders.length.toString()
-      const avg = Math.round((totalRevenue / orders.length) * 100) / 100
-      metrics.value[3].value = 'RM ' + avg.toLocaleString('en-MY', { minimumFractionDigits: 2 })
+    const paidOrders = orders || []
+    totalTransactions.value = paidOrders.length
+    totalSales.value = paidOrders.reduce((sum: number, o: any) => sum + (o.total || 0), 0)
+    avgOrderValue.value = paidOrders.length > 0 ? Math.round(totalSales.value / paidOrders.length) : 0
+
+    // 2. New customers this period
+    const { count } = await client
+      .from('customers')
+      .select('id', { count: 'exact', head: true })
+      .eq('outlet_id', outletId.value)
+      .gte('created_at', startDate)
+    newCustomers.value = count || 0
+
+    // 3. Channel breakdown
+    const channels: Record<string, { count: number; total: number }> = {}
+    paidOrders.forEach((o: any) => {
+      const ch = o.order_type || 'dine-in'
+      if (!channels[ch]) channels[ch] = { count: 0, total: 0 }
+      channels[ch].count++
+      channels[ch].total += o.total || 0
+    })
+    channelBreakdown.value = Object.entries(channels).map(([label, data]) => ({
+      label: label === 'dine-in' ? 'Dine-in' : label === 'takeaway' ? 'Takeaway' : label === 'delivery' ? 'Delivery' : label,
+      count: data.count,
+      total: data.total
+    }))
+
+    // 4. Best selling products
+    const orderIds = paidOrders.map((o: any) => o.id)
+    if (orderIds.length > 0) {
+      const { data: items } = await client
+        .from('order_items')
+        .select('product_id, quantity, total_price, products(name, categories(name))')
+        .in('order_id', orderIds)
+
+      const productMap: Record<string, { name: string; category: string; sold: number; revenue: number }> = {}
+      ;(items || []).forEach((item: any) => {
+        const pid = item.product_id
+        if (!productMap[pid]) {
+          productMap[pid] = {
+            name: item.products?.name || 'Unknown',
+            category: item.products?.categories?.name || 'Other',
+            sold: 0,
+            revenue: 0
+          }
+        }
+        productMap[pid].sold += item.quantity
+        productMap[pid].revenue += item.total_price
+      })
+      bestSellers.value = Object.values(productMap).sort((a, b) => b.sold - a.sold).slice(0, 5)
+    } else {
+      bestSellers.value = []
     }
+
+    // 5. Recent orders
+    recentOrders.value = paidOrders.slice(0, 5)
+
   } finally {
-    loadingMetrics.value = false
+    loading.value = false
   }
-})
+}
+
+watch(dateRange, () => fetchDashboardData())
+onMounted(fetchDashboardData)
+
+const formatRM = (amount: number) => 'RM ' + (amount / 100 || amount).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+const categoryColors = ['bg-red-100 text-red-600', 'bg-amber-100 text-amber-600', 'bg-green-100 text-green-600', 'bg-blue-100 text-blue-600', 'bg-purple-100 text-purple-600']
 </script>
 
 <template>
   <div class="space-y-6">
     <!-- Header -->
     <div class="flex justify-between items-start">
-      <h2 class="text-2xl font-bold text-gray-900">Welcome Back !</h2>
+      <div>
+        <h2 class="text-2xl font-bold text-gray-900">Welcome Back!</h2>
+        <p class="text-sm text-gray-500 mt-1">Here's what's happening with your store.</p>
+      </div>
       <div class="flex items-center gap-1">
         <button
-          v-for="range in ['Today', 'This Week', 'This Month']"
+          v-for="range in (['Today', 'This Week', 'This Month'] as const)"
           :key="range"
           @click="dateRange = range"
           :class="[
@@ -76,67 +145,110 @@ onMounted(async () => {
       </div>
     </div>
 
+    <!-- Pro Tip -->
+    <div class="bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 flex items-start gap-3">
+      <UIcon name="i-lucide-lightbulb" class="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
+      <div>
+        <p class="text-sm font-medium text-blue-900">Pro Tip</p>
+        <p class="text-sm text-blue-700">Use the date range filters above to compare performance across different periods. Your stats update in real-time!</p>
+      </div>
+    </div>
+
     <!-- 4 Stat Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-      <div v-for="m in metrics" :key="m.label" class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+      <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
         <div class="flex items-start justify-between mb-3">
-          <p class="text-sm text-gray-500 font-medium">{{ m.label }}</p>
-          <UIcon name="i-lucide-info" class="w-4 h-4 text-gray-300" />
+          <p class="text-sm text-gray-500 font-medium">Total Sales</p>
+          <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+            <UIcon name="i-lucide-dollar-sign" class="w-5 h-5 text-blue-600" />
+          </div>
         </div>
-        <p v-if="loadingMetrics" class="text-2xl font-bold text-gray-300 animate-pulse">---</p>
-        <p v-else class="text-2xl font-bold text-gray-900">{{ m.value }}</p>
-        <div class="flex items-center gap-2 mt-2">
-          <span
-            :class="[
-              'text-xs font-semibold px-2 py-0.5 rounded-full',
-              m.trendDir === 'up' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
-            ]"
-          >
-            {{ m.trendDir === 'up' ? '↗' : '↘' }} {{ m.trend }}
-          </span>
-          <span class="text-xs text-gray-400">{{ m.change }}</span>
+        <p v-if="loading" class="text-2xl font-bold text-gray-300 animate-pulse">---</p>
+        <p v-else class="text-2xl font-bold text-gray-900">{{ formatRM(totalSales) }}</p>
+        <p class="text-xs text-gray-400 mt-2">{{ dateRange }} period</p>
+      </div>
+
+      <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between mb-3">
+          <p class="text-sm text-gray-500 font-medium">New Customers</p>
+          <div class="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
+            <UIcon name="i-lucide-user-plus" class="w-5 h-5 text-emerald-600" />
+          </div>
         </div>
-        <p v-if="m.sub" class="text-xs text-primary mt-2 cursor-pointer hover:underline">{{ m.sub }}</p>
+        <p v-if="loading" class="text-2xl font-bold text-gray-300 animate-pulse">---</p>
+        <p v-else class="text-2xl font-bold text-gray-900">{{ newCustomers }}</p>
+        <p class="text-xs text-gray-400 mt-2">{{ dateRange }} period</p>
+      </div>
+
+      <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between mb-3">
+          <p class="text-sm text-gray-500 font-medium">Total Transactions</p>
+          <div class="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+            <UIcon name="i-lucide-receipt" class="w-5 h-5 text-purple-600" />
+          </div>
+        </div>
+        <p v-if="loading" class="text-2xl font-bold text-gray-300 animate-pulse">---</p>
+        <p v-else class="text-2xl font-bold text-gray-900">{{ totalTransactions.toLocaleString() }}</p>
+        <p class="text-xs text-gray-400 mt-2">{{ dateRange }} period</p>
+      </div>
+
+      <div class="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between mb-3">
+          <p class="text-sm text-gray-500 font-medium">Avg. Order Value</p>
+          <div class="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center">
+            <UIcon name="i-lucide-calculator" class="w-5 h-5 text-orange-600" />
+          </div>
+        </div>
+        <p v-if="loading" class="text-2xl font-bold text-gray-300 animate-pulse">---</p>
+        <p v-else class="text-2xl font-bold text-gray-900">{{ formatRM(avgOrderValue) }}</p>
+        <p class="text-xs text-gray-400 mt-2">{{ dateRange }} period</p>
       </div>
     </div>
 
     <!-- Charts Row -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- Accumulative Sales Chart -->
+      <!-- Sales by Channel -->
       <div class="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h3 class="font-semibold text-gray-900 text-lg mb-1">Total Accumulative Sales <span class="text-gray-400 text-sm font-normal">(RM)</span></h3>
-        <div class="h-[300px] flex items-center justify-center border-2 border-dashed border-gray-200 rounded-lg bg-gray-50 text-gray-400 mt-4">
+        <h3 class="font-semibold text-gray-900 text-lg mb-4">Sales by Channel</h3>
+        <div v-if="!loading && channelBreakdown.length === 0" class="h-[200px] flex items-center justify-center text-gray-400">
           <div class="text-center">
-            <UIcon name="i-lucide-line-chart" class="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p class="text-sm">Sales chart will render with real data</p>
-            <div class="flex gap-4 justify-center mt-3">
-              <span class="flex items-center gap-1.5 text-xs"><span class="w-3 h-3 rounded-full bg-blue-600 inline-block"></span> Yesterday</span>
-              <span class="flex items-center gap-1.5 text-xs"><span class="w-3 h-3 rounded-full bg-orange-500 inline-block"></span> Today</span>
+            <UIcon name="i-lucide-bar-chart-3" class="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <p class="text-sm">No sales data for this period</p>
+          </div>
+        </div>
+        <div v-else class="space-y-4">
+          <div v-for="ch in channelBreakdown" :key="ch.label" class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+            <div class="flex items-center gap-3">
+              <UIcon :name="ch.label === 'Dine-in' ? 'i-lucide-utensils-crossed' : ch.label === 'Takeaway' ? 'i-lucide-shopping-bag' : 'i-lucide-truck'" class="w-5 h-5 text-gray-600" />
+              <div>
+                <p class="font-medium text-gray-900">{{ ch.label }}</p>
+                <p class="text-xs text-gray-500">{{ ch.count }} orders</p>
+              </div>
             </div>
+            <p class="font-bold text-gray-900">{{ formatRM(ch.total) }}</p>
           </div>
         </div>
       </div>
 
-      <!-- Sales by Channels -->
+      <!-- Quick Summary -->
       <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h3 class="font-semibold text-gray-900 text-lg mb-4">Total Sales by Channels</h3>
-        <div class="flex flex-col items-center justify-center h-[200px]">
-          <!-- Donut placeholder -->
-          <div class="w-36 h-36 rounded-full border-[20px] border-[#1E293B] border-t-blue-300 flex items-center justify-center">
+        <h3 class="font-semibold text-gray-900 text-lg mb-4">Quick Summary</h3>
+        <div class="space-y-4">
+          <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+            <span class="text-sm text-blue-700 font-medium">Total Orders</span>
+            <span class="font-bold text-blue-900">{{ totalTransactions }}</span>
           </div>
-        </div>
-        <div class="flex justify-center gap-8 mt-4">
-          <div class="text-center">
-            <div class="flex items-center gap-1.5 mb-1"><span class="w-3 h-1 bg-[#1E293B] rounded-full inline-block"></span></div>
-            <p class="text-xl font-bold text-gray-900">82.74%</p>
-            <p class="text-xs text-gray-500">Offline ⓘ</p>
-            <p class="text-xs text-gray-400">RM 6,764.88</p>
+          <div class="flex items-center justify-between p-3 bg-emerald-50 rounded-lg">
+            <span class="text-sm text-emerald-700 font-medium">Revenue</span>
+            <span class="font-bold text-emerald-900">{{ formatRM(totalSales) }}</span>
           </div>
-          <div class="text-center">
-            <div class="flex items-center gap-1.5 mb-1"><span class="w-3 h-1 bg-blue-300 rounded-full inline-block"></span></div>
-            <p class="text-xl font-bold text-gray-900">17.26%</p>
-            <p class="text-xs text-gray-500">QR Order and Pay ⓘ</p>
-            <p class="text-xs text-gray-400">RM 1,411.00</p>
+          <div class="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+            <span class="text-sm text-orange-700 font-medium">Avg Order</span>
+            <span class="font-bold text-orange-900">{{ formatRM(avgOrderValue) }}</span>
+          </div>
+          <div class="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+            <span class="text-sm text-purple-700 font-medium">New Customers</span>
+            <span class="font-bold text-purple-900">{{ newCustomers }}</span>
           </div>
         </div>
       </div>
@@ -144,44 +256,20 @@ onMounted(async () => {
 
     <!-- Bottom Row -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <!-- Sales per Store with Channel -->
-      <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
-        <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100">
-          <h3 class="font-semibold text-gray-900">Sales per Store with Channel</h3>
-          <button class="text-sm text-primary hover:underline">View All</button>
-        </div>
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-gray-500 text-xs uppercase tracking-wider">
-              <th class="text-left py-3 px-6 font-medium">Store Name</th>
-              <th class="text-left py-3 px-6 font-medium">Offline</th>
-              <th class="text-left py-3 px-6 font-medium">QR Order</th>
-              <th class="text-left py-3 px-6 font-medium">Total</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-50">
-            <tr v-for="store in storeChannels" :key="store.name" class="hover:bg-gray-50 transition-colors">
-              <td class="py-4 px-6 font-medium text-gray-900">{{ store.name }}</td>
-              <td class="py-4 px-6 text-gray-600">{{ store.offline }}</td>
-              <td class="py-4 px-6 text-gray-600">{{ store.qr }}</td>
-              <td class="py-4 px-6 font-bold text-gray-900">{{ store.total }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
       <!-- Best Selling Products -->
       <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
         <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100">
           <h3 class="font-semibold text-gray-900">Best Selling Products</h3>
-          <div class="flex items-center gap-1 text-sm text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg">
-            By Qty <UIcon name="i-lucide-chevron-down" class="w-4 h-4" />
-          </div>
+          <span class="text-xs text-gray-500">{{ dateRange }}</span>
         </div>
-        <div class="divide-y divide-gray-50">
+        <div v-if="bestSellers.length === 0 && !loading" class="p-10 text-center text-gray-400">
+          <UIcon name="i-lucide-trending-up" class="w-8 h-8 mx-auto mb-2 opacity-40" />
+          <p class="text-sm">No sales data yet. Complete orders from the POS to see your top products.</p>
+        </div>
+        <div v-else class="divide-y divide-gray-50">
           <div v-for="(item, i) in bestSellers" :key="item.name" class="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors">
-            <div :class="[item.color, 'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0']">
-              <UIcon name="i-lucide-coffee" class="w-5 h-5" />
+            <div :class="[categoryColors[i % categoryColors.length], 'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0']">
+              <span class="font-bold text-sm">{{ i + 1 }}</span>
             </div>
             <div class="flex-1 min-w-0">
               <p class="font-medium text-gray-900">{{ item.name }}</p>
@@ -189,7 +277,31 @@ onMounted(async () => {
             </div>
             <div class="text-right">
               <p class="font-bold text-gray-900">{{ item.sold }} sold</p>
-              <p class="text-xs" :class="item.trend.startsWith('+') ? 'text-green-600' : 'text-red-500'">{{ item.trend }}</p>
+              <p class="text-xs text-gray-500">{{ formatRM(item.revenue) }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Orders -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
+        <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100">
+          <h3 class="font-semibold text-gray-900">Recent Orders</h3>
+          <NuxtLink to="/backoffice/transactions" class="text-sm text-primary hover:underline">View All</NuxtLink>
+        </div>
+        <div v-if="recentOrders.length === 0 && !loading" class="p-10 text-center text-gray-400">
+          <UIcon name="i-lucide-receipt" class="w-8 h-8 mx-auto mb-2 opacity-40" />
+          <p class="text-sm">No orders yet. Start selling from the POS!</p>
+        </div>
+        <div v-else class="divide-y divide-gray-50">
+          <div v-for="order in recentOrders" :key="order.id" class="flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors">
+            <div>
+              <p class="font-medium text-gray-900 text-sm">#{{ order.receipt_number }}</p>
+              <p class="text-xs text-gray-500">{{ new Date(order.created_at).toLocaleString('en-MY', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }}</p>
+            </div>
+            <div class="text-right">
+              <p class="font-bold text-gray-900">{{ formatRM(order.total) }}</p>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 font-medium">{{ order.payment_status }}</span>
             </div>
           </div>
         </div>

@@ -1,7 +1,5 @@
 <script setup lang="ts">
-definePageMeta({
-  layout: 'cashier'
-})
+definePageMeta({ layout: 'cashier' })
 
 const client = useSupabaseClient()
 const user = useSupabaseUser()
@@ -23,17 +21,33 @@ const categoryIcons: Record<string, string> = {
   'Main Course': 'i-lucide-utensils-crossed',
   'Desserts': 'i-lucide-ice-cream-cone',
   'Cold Drinks': 'i-lucide-glass-water',
-  'Other': 'i-lucide-package',
+  'Food': 'i-lucide-utensils-crossed',
+  'Beverages': 'i-lucide-coffee',
 }
 
 // Order State
 const orderItems = ref<any[]>([])
-const isCharging = ref(false)
-const orderCompleted = ref(false)
-const orderNumber = ref('#3820')
+const orderType = ref<'dine-in' | 'takeaway' | 'delivery'>('dine-in')
+const orderNote = ref('')
+const showNoteModal = ref(false)
+
+// Variation Picker
+const showVariationPicker = ref(false)
+const pickingProduct = ref<any>(null)
+const selectedVariations = ref<Record<string, any>>({})
+
+// Payment Flow
+const showPaymentModal = ref(false)
+const paymentMethod = ref<'cash' | 'qris' | 'debit' | 'credit'>('cash')
+const cashReceived = ref('')
+const isProcessing = ref(false)
+
+// Order Complete
+const showSuccessModal = ref(false)
+const completedOrder = ref<any>(null)
 
 const formatCurrency = (amount: number) => {
-  return 'MYR' + amount.toFixed(2)
+  return amount.toLocaleString('en-MY', { minimumFractionDigits: 0 })
 }
 
 // Load products from Supabase
@@ -42,10 +56,7 @@ onMounted(async () => {
   try {
     const { data: profile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
     outletId.value = profile?.outlet_id || null
-    if (!outletId.value) {
-      loading.value = false
-      return
-    }
+    if (!outletId.value) { loading.value = false; return }
 
     const { data } = await client
       .from('products')
@@ -54,6 +65,21 @@ onMounted(async () => {
       .eq('is_active', true)
       .order('name')
 
+    // Get variations for all products
+    const productIds = (data || []).map((p: any) => p.id)
+    let varMap: Record<string, any[]> = {}
+    if (productIds.length > 0) {
+      const { data: vars } = await client
+        .from('product_variations')
+        .select('*')
+        .in('product_id', productIds)
+        .order('sort_order')
+      ;(vars || []).forEach((v: any) => {
+        if (!varMap[v.product_id]) varMap[v.product_id] = []
+        varMap[v.product_id].push(v)
+      })
+    }
+
     products.value = (data || []).map((p: any) => ({
       id: p.id,
       name: p.name,
@@ -61,7 +87,8 @@ onMounted(async () => {
       price: p.price,
       category: p.categories?.name || 'Other',
       image: p.image_url || null,
-      stock: p.stock
+      stock: p.stock,
+      variations: varMap[p.id] || []
     }))
 
     // Build categories
@@ -80,22 +107,69 @@ const filteredProducts = computed(() => {
   })
 })
 
-const subtotal = computed(() => orderItems.value.reduce((acc, item) => acc + (item.price * item.quantity), 0))
-const discount = computed(() => 0)
-const tax = computed(() => Math.round(subtotal.value * 0.10 * 100) / 100)
-const total = computed(() => subtotal.value - discount.value + tax.value)
+const subtotal = computed(() => orderItems.value.reduce((acc, item) => acc + (item.finalPrice * item.quantity), 0))
+const tax = computed(() => Math.round(subtotal.value * 0.10))
+const total = computed(() => subtotal.value + tax.value)
+const change = computed(() => {
+  const cash = parseInt(cashReceived.value) || 0
+  return Math.max(0, cash - total.value)
+})
+const canPay = computed(() => {
+  if (paymentMethod.value === 'cash') {
+    return (parseInt(cashReceived.value) || 0) >= total.value
+  }
+  return true
+})
 
-const addToOrder = (product: any) => {
-  const existing = orderItems.value.find(item => item.id === product.id)
-  if (existing) {
-    existing.quantity++
+const handleProductClick = (product: any) => {
+  if (product.variations && product.variations.length > 0) {
+    // Show variation picker
+    pickingProduct.value = product
+    selectedVariations.value = {}
+    // Default select first option for each variation group
+    product.variations.forEach((v: any) => {
+      const options = v.options || []
+      if (options.length > 0) {
+        selectedVariations.value[v.label] = options[0]
+      }
+    })
+    showVariationPicker.value = true
   } else {
-    orderItems.value.push({ id: product.id, name: product.name, price: product.price, quantity: 1, image: product.image })
+    addToOrder(product, 0, {})
   }
 }
 
+const addToOrder = (product: any, priceAdj: number, variationSnapshot: any) => {
+  const finalPrice = product.price + priceAdj
+  const varKey = JSON.stringify(variationSnapshot)
+  const existing = orderItems.value.find(item => item.id === product.id && JSON.stringify(item.variationSnapshot) === varKey)
+
+  if (existing) {
+    existing.quantity++
+  } else {
+    orderItems.value.push({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      finalPrice,
+      quantity: 1,
+      image: product.image,
+      variationSnapshot,
+      variationLabel: Object.entries(variationSnapshot).map(([k, v]: any) => v.name).join(', ')
+    })
+  }
+}
+
+const confirmVariation = () => {
+  if (!pickingProduct.value) return
+  const priceAdj = Object.values(selectedVariations.value).reduce((sum: number, opt: any) => sum + (opt.price_adj || 0), 0)
+  addToOrder(pickingProduct.value, priceAdj, selectedVariations.value)
+  showVariationPicker.value = false
+  pickingProduct.value = null
+}
+
 const updateQuantity = (item: any, delta: number) => {
-  const index = orderItems.value.findIndex(i => i.id === item.id)
+  const index = orderItems.value.findIndex(i => i.id === item.id && JSON.stringify(i.variationSnapshot) === JSON.stringify(item.variationSnapshot))
   if (index !== -1) {
     orderItems.value[index].quantity += delta
     if (orderItems.value[index].quantity <= 0) {
@@ -105,16 +179,25 @@ const updateQuantity = (item: any, delta: number) => {
 }
 
 const clearOrder = () => {
+  if (orderItems.value.length === 0) return
+  if (!confirm('Clear all items from the current order?')) return
   orderItems.value = []
-  orderCompleted.value = false
+  orderNote.value = ''
 }
 
-const chargeOrder = async () => {
-  if (orderItems.value.length === 0 || !user.value || !outletId.value) return
-  isCharging.value = true
+const openPayment = () => {
+  if (orderItems.value.length === 0) return
+  paymentMethod.value = 'cash'
+  cashReceived.value = ''
+  showPaymentModal.value = true
+}
+
+const processPayment = async () => {
+  if (!user.value || !outletId.value || !canPay.value) return
+  isProcessing.value = true
 
   try {
-    const receiptNumber = 'TRX-' + Date.now().toString().slice(-6)
+    const receiptNumber = 'TRX-' + Date.now().toString().slice(-8)
 
     const { data: order, error: orderErr } = await client
       .from('orders')
@@ -126,10 +209,10 @@ const chargeOrder = async () => {
         tax: tax.value,
         discount: 0,
         total: total.value,
-        payment_method: 'cash',
+        payment_method: paymentMethod.value,
         payment_status: 'paid',
         order_status: 'completed',
-        order_type: 'dine-in'
+        order_type: orderType.value
       })
       .select()
       .single()
@@ -140,24 +223,44 @@ const chargeOrder = async () => {
       order_id: order.id,
       product_id: item.id,
       quantity: item.quantity,
-      unit_price: item.price,
-      total_price: item.price * item.quantity
+      unit_price: item.finalPrice,
+      total_price: item.finalPrice * item.quantity,
+      variation_snapshot: Object.keys(item.variationSnapshot).length > 0 ? item.variationSnapshot : null,
+      notes: orderNote.value || null
     }))
 
     const { error: itemsErr } = await client.from('order_items').insert(items)
     if (itemsErr) throw itemsErr
 
-    orderCompleted.value = true
-    setTimeout(() => {
-      orderItems.value = []
-      orderCompleted.value = false
-    }, 2000)
+    // Show success
+    completedOrder.value = {
+      receiptNumber,
+      total: total.value,
+      paymentMethod: paymentMethod.value,
+      change: paymentMethod.value === 'cash' ? change.value : 0,
+      items: [...orderItems.value],
+      orderType: orderType.value
+    }
+
+    showPaymentModal.value = false
+    showSuccessModal.value = true
+
   } catch (err: any) {
     alert('Failed to complete order: ' + (err.message || 'Unknown error'))
   } finally {
-    isCharging.value = false
+    isProcessing.value = false
   }
 }
+
+const startNewOrder = () => {
+  orderItems.value = []
+  orderNote.value = ''
+  completedOrder.value = null
+  showSuccessModal.value = false
+}
+
+const orderTypeLabels = { 'dine-in': 'DI', 'takeaway': 'TA', 'delivery': 'DL' }
+const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery': 'Delivery' }
 </script>
 
 <template>
@@ -184,15 +287,22 @@ const chargeOrder = async () => {
         </button>
       </nav>
 
-      <!-- Need Help -->
-      <div class="p-3 mt-auto">
-        <button class="w-full flex items-center gap-2 px-3 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-medium hover:bg-emerald-100 transition-colors">
-          <UIcon name="i-lucide-headphones" class="w-5 h-5" />
-          <div class="text-left">
-            <p class="font-semibold text-xs">Need Help?</p>
-            <p class="text-[10px] text-emerald-600">Contact Manager</p>
-          </div>
-        </button>
+      <!-- Order Type Selector -->
+      <div class="p-3 border-t border-gray-100">
+        <p class="text-[10px] font-semibold text-gray-400 uppercase mb-2">Order Type</p>
+        <div class="flex gap-1">
+          <button
+            v-for="type in (['dine-in', 'takeaway', 'delivery'] as const)"
+            :key="type"
+            @click="orderType = type"
+            :class="[
+              'flex-1 py-2 text-xs font-semibold rounded-lg transition-colors text-center',
+              orderType === type ? 'bg-[#1E293B] text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            ]"
+          >
+            {{ (orderTypeLabels as any)[type] }}
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -202,14 +312,14 @@ const chargeOrder = async () => {
       <div class="flex items-center justify-between mb-4">
         <div>
           <h2 class="text-xl font-bold text-gray-900">Choose Order</h2>
-          <p class="text-sm text-gray-500">Select items to add to the current order</p>
+          <p class="text-sm text-gray-500">{{ (orderTypeNames as any)[orderType] }} • Select items to add</p>
         </div>
         <span class="bg-emerald-50 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-emerald-200">
-          Showing {{ filteredProducts.length }} items
+          {{ filteredProducts.length }} items
         </span>
       </div>
 
-      <!-- Loading state -->
+      <!-- Loading -->
       <div v-if="loading" class="flex-1 flex items-center justify-center">
         <div class="text-center text-gray-400">
           <UIcon name="i-lucide-loader-2" class="w-8 h-8 animate-spin mx-auto mb-2" />
@@ -217,13 +327,13 @@ const chargeOrder = async () => {
         </div>
       </div>
 
-      <!-- Empty state -->
+      <!-- Empty -->
       <div v-else-if="filteredProducts.length === 0" class="flex-1 flex items-center justify-center">
         <div class="text-center text-gray-400">
           <UIcon name="i-lucide-package" class="w-12 h-12 mx-auto mb-3 opacity-40" />
           <p class="text-lg font-medium mb-1">No products found</p>
-          <p class="text-sm">Add products from the backoffice to start selling.</p>
-          <UButton to="/backoffice/products" color="primary" variant="soft" class="mt-4" label="Go to Products" icon="i-lucide-arrow-right" />
+          <p class="text-sm mb-4">Add products from the backoffice to start selling.</p>
+          <UButton to="/backoffice/products" color="primary" variant="soft" label="Go to Products" icon="i-lucide-arrow-right" />
         </div>
       </div>
 
@@ -234,7 +344,7 @@ const chargeOrder = async () => {
             v-for="product in filteredProducts"
             :key="product.id"
             class="bg-[#1E293B] rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1 group flex flex-col"
-            @click="addToOrder(product)"
+            @click="handleProductClick(product)"
           >
             <!-- Product Image -->
             <div class="aspect-[4/3] w-full relative overflow-hidden">
@@ -245,6 +355,10 @@ const chargeOrder = async () => {
               <!-- Price Badge -->
               <span class="absolute top-3 left-3 bg-emerald-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md">
                 {{ formatCurrency(product.price) }}
+              </span>
+              <!-- Variation badge -->
+              <span v-if="product.variations.length > 0" class="absolute top-3 right-3 bg-purple-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                {{ product.variations.length }} options
               </span>
             </div>
             <!-- Product Info -->
@@ -264,30 +378,24 @@ const chargeOrder = async () => {
         <div class="flex items-center justify-between">
           <h2 class="font-bold text-lg text-gray-900">Current Order</h2>
           <span class="bg-[#1E293B] text-white text-xs font-bold w-8 h-8 rounded-lg flex items-center justify-center">
-            DI
+            {{ (orderTypeLabels as any)[orderType] }}
           </span>
         </div>
-        <p class="text-xs text-gray-500 mt-1">Order {{ orderNumber }} • Dine-in</p>
+        <p class="text-xs text-gray-500 mt-1">{{ (orderTypeNames as any)[orderType] }} • {{ orderItems.length }} item{{ orderItems.length !== 1 ? 's' : '' }}</p>
       </div>
 
       <!-- Order Items List -->
       <div class="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar space-y-3">
-        <div v-if="orderItems.length === 0 && !orderCompleted" class="flex flex-col items-center justify-center h-full text-center text-gray-400 space-y-4">
+        <div v-if="orderItems.length === 0" class="flex flex-col items-center justify-center h-full text-center text-gray-400 space-y-4">
           <UIcon name="i-lucide-shopping-cart" class="w-12 h-12 text-gray-200" />
-          <p class="text-sm">Order is empty.<br>Select items from the menu.</p>
-        </div>
-
-        <!-- Success message -->
-        <div v-if="orderCompleted" class="flex flex-col items-center justify-center h-full text-center space-y-4">
-          <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-600">
-            <UIcon name="i-lucide-check" class="w-8 h-8" />
+          <div>
+            <p class="text-sm font-medium">Order is empty</p>
+            <p class="text-xs mt-1">Select items from the menu to get started.</p>
           </div>
-          <p class="text-green-600 font-semibold text-lg">Order Complete!</p>
         </div>
 
-        <!-- Order Items -->
-        <div v-for="item in orderItems" :key="item.id" class="flex items-center gap-3">
-          <!-- Product Thumbnail -->
+        <div v-for="item in orderItems" :key="item.id + JSON.stringify(item.variationSnapshot)" class="flex items-center gap-3">
+          <!-- Thumbnail -->
           <div class="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
             <img v-if="item.image" :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
             <div v-else class="w-full h-full flex items-center justify-center">
@@ -297,10 +405,11 @@ const chargeOrder = async () => {
           <!-- Details -->
           <div class="flex-1 min-w-0">
             <h4 class="font-semibold text-sm text-gray-900 truncate">{{ item.name }}</h4>
-            <p class="text-xs text-gray-500">{{ formatCurrency(item.price) }}</p>
+            <p v-if="item.variationLabel" class="text-[10px] text-purple-600 font-medium">{{ item.variationLabel }}</p>
+            <p class="text-xs text-gray-500">{{ formatCurrency(item.finalPrice) }}</p>
           </div>
           <!-- Qty Controls -->
-          <div class="flex items-center gap-2 bg-gray-50 rounded-lg border border-gray-200 px-1 py-0.5">
+          <div class="flex items-center gap-1 bg-gray-50 rounded-lg border border-gray-200 px-1 py-0.5">
             <button class="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-200 rounded transition-colors" @click.stop="updateQuantity(item, -1)">
               <UIcon name="i-lucide-minus" class="w-3.5 h-3.5" />
             </button>
@@ -314,15 +423,10 @@ const chargeOrder = async () => {
 
       <!-- Totals & Actions -->
       <div class="border-t border-gray-200 p-5">
-        <!-- Breakdown -->
         <div class="space-y-2 mb-4">
           <div class="flex justify-between text-sm">
             <span class="text-gray-500">Subtotal</span>
             <span class="font-medium text-gray-900">{{ formatCurrency(subtotal) }}</span>
-          </div>
-          <div class="flex justify-between text-sm">
-            <span class="text-gray-500">Discount</span>
-            <span class="font-medium text-gray-900">{{ formatCurrency(discount) }}</span>
           </div>
           <div class="flex justify-between text-sm">
             <span class="text-gray-500">Tax (10%)</span>
@@ -336,33 +440,225 @@ const chargeOrder = async () => {
           </div>
         </div>
 
+        <!-- Note indicator -->
+        <div v-if="orderNote" class="mb-3 bg-yellow-50 rounded-lg px-3 py-2 flex items-center gap-2">
+          <UIcon name="i-lucide-sticky-note" class="w-4 h-4 text-yellow-600" />
+          <p class="text-xs text-yellow-700 truncate flex-1">{{ orderNote }}</p>
+        </div>
+
         <!-- Action Buttons -->
         <div class="flex gap-3 mb-3">
           <button
-            class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors"
+            class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors disabled:opacity-40"
             :disabled="orderItems.length === 0"
+            @click="clearOrder"
           >
-            <UIcon name="i-lucide-pause" class="w-4 h-4" />
-            Hold Order
+            <UIcon name="i-lucide-trash-2" class="w-4 h-4" />
+            Clear
           </button>
           <button
             class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors"
+            @click="showNoteModal = true"
           >
             <UIcon name="i-lucide-file-text" class="w-4 h-4" />
-            Add Note
+            Note
           </button>
         </div>
 
         <button
-          @click="chargeOrder"
+          @click="openPayment"
           class="w-full flex items-center justify-center gap-3 py-4 rounded-xl bg-[#1E293B] text-white font-bold text-lg hover:bg-[#334155] transition-colors disabled:opacity-50"
-          :disabled="orderItems.length === 0 || isCharging"
+          :disabled="orderItems.length === 0"
         >
           <UIcon name="i-lucide-wallet" class="w-5 h-5" />
-          Checkout
+          Checkout — {{ formatCurrency(total) }}
         </button>
       </div>
     </div>
+
+    <!-- Variation Picker Modal -->
+    <UModal v-model:open="showVariationPicker">
+      <template #content>
+        <div class="p-6 bg-white" v-if="pickingProduct">
+          <div class="flex items-center gap-4 mb-6">
+            <div class="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+              <img v-if="pickingProduct.image" :src="pickingProduct.image" class="w-full h-full object-cover" />
+              <div v-else class="w-full h-full flex items-center justify-center">
+                <UIcon name="i-lucide-coffee" class="w-6 h-6 text-gray-400" />
+              </div>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-gray-900">{{ pickingProduct.name }}</h3>
+              <p class="text-sm text-gray-500">Base price: {{ formatCurrency(pickingProduct.price) }}</p>
+            </div>
+          </div>
+
+          <div class="space-y-5">
+            <div v-for="variation in pickingProduct.variations" :key="variation.id">
+              <p class="text-sm font-semibold text-gray-700 mb-2">{{ variation.label }}</p>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="option in (variation.options || [])"
+                  :key="option.name"
+                  @click="selectedVariations[variation.label] = option"
+                  :class="[
+                    'px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all',
+                    selectedVariations[variation.label]?.name === option.name
+                      ? 'border-[#1E293B] bg-[#1E293B] text-white'
+                      : 'border-gray-200 text-gray-700 hover:border-gray-400'
+                  ]"
+                >
+                  {{ option.name }}
+                  <span v-if="option.price_adj > 0" class="text-xs ml-1 opacity-70">+{{ formatCurrency(option.price_adj) }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
+            <p class="font-bold text-lg text-gray-900">
+              {{ formatCurrency(pickingProduct.price + Object.values(selectedVariations).reduce((s: number, o: any) => s + (o.price_adj || 0), 0)) }}
+            </p>
+            <div class="flex gap-3">
+              <UButton color="neutral" variant="ghost" label="Cancel" @click="showVariationPicker = false" />
+              <UButton color="primary" label="Add to Order" @click="confirmVariation" />
+            </div>
+          </div>
+        </div>
+      </template>
+    </UModal>
+
+    <!-- Note Modal -->
+    <UModal v-model:open="showNoteModal">
+      <template #content>
+        <div class="p-6 bg-white">
+          <h3 class="text-base font-semibold text-gray-900 mb-4">Order Note</h3>
+          <UTextarea v-model="orderNote" placeholder="Special instructions, allergies, etc." autoresize class="w-full" />
+          <div class="flex justify-end gap-3 mt-4">
+            <UButton color="neutral" variant="ghost" label="Cancel" @click="showNoteModal = false" />
+            <UButton color="primary" label="Save Note" @click="showNoteModal = false" />
+          </div>
+        </div>
+      </template>
+    </UModal>
+
+    <!-- Payment Modal -->
+    <UModal v-model:open="showPaymentModal">
+      <template #content>
+        <div class="p-6 bg-white min-w-[400px]">
+          <h3 class="text-lg font-bold text-gray-900 mb-1">Payment</h3>
+          <p class="text-sm text-gray-500 mb-6">Select payment method and confirm</p>
+
+          <!-- Order Summary -->
+          <div class="bg-gray-50 rounded-xl p-4 mb-6">
+            <div class="flex justify-between text-sm mb-1">
+              <span class="text-gray-500">{{ orderItems.length }} item(s)</span>
+              <span class="text-gray-500">{{ (orderTypeNames as any)[orderType] }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="font-semibold text-gray-900">Total</span>
+              <span class="text-2xl font-bold text-gray-900">{{ formatCurrency(total) }}</span>
+            </div>
+          </div>
+
+          <!-- Payment Methods -->
+          <p class="text-sm font-semibold text-gray-700 mb-3">Payment Method</p>
+          <div class="grid grid-cols-2 gap-3 mb-6">
+            <button
+              v-for="pm in ([
+                { id: 'cash', icon: 'i-lucide-banknote', label: 'Cash' },
+                { id: 'qris', icon: 'i-lucide-qr-code', label: 'QRIS' },
+                { id: 'debit', icon: 'i-lucide-credit-card', label: 'Debit Card' },
+                { id: 'credit', icon: 'i-lucide-credit-card', label: 'Credit Card' }
+              ] as const)"
+              :key="pm.id"
+              @click="paymentMethod = pm.id as any"
+              :class="[
+                'flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left',
+                paymentMethod === pm.id
+                  ? 'border-[#1E293B] bg-[#1E293B] text-white'
+                  : 'border-gray-200 text-gray-700 hover:border-gray-400'
+              ]"
+            >
+              <UIcon :name="pm.icon" class="w-5 h-5" />
+              <span class="font-medium text-sm">{{ pm.label }}</span>
+            </button>
+          </div>
+
+          <!-- Cash: Amount received -->
+          <div v-if="paymentMethod === 'cash'" class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Amount Received</label>
+            <UInput v-model="cashReceived" type="number" placeholder="Enter amount" class="text-lg" />
+            <!-- Quick cash buttons -->
+            <div class="flex gap-2 mt-2">
+              <button v-for="amount in [total, Math.ceil(total / 10000) * 10000, Math.ceil(total / 50000) * 50000, 100000]" :key="amount"
+                @click="cashReceived = amount.toString()"
+                class="flex-1 py-2 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              >
+                {{ formatCurrency(amount) }}
+              </button>
+            </div>
+            <div v-if="parseInt(cashReceived) >= total" class="mt-3 bg-green-50 rounded-lg p-3 flex justify-between items-center">
+              <span class="text-sm text-green-700 font-medium">Change</span>
+              <span class="text-lg font-bold text-green-700">{{ formatCurrency(change) }}</span>
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <UButton color="neutral" variant="ghost" label="Cancel" @click="showPaymentModal = false" class="flex-1" />
+            <button
+              @click="processPayment"
+              :disabled="!canPay || isProcessing"
+              class="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <UIcon v-if="isProcessing" name="i-lucide-loader-2" class="w-4 h-4 animate-spin" />
+              <span v-else>Confirm Payment</span>
+            </button>
+          </div>
+        </div>
+      </template>
+    </UModal>
+
+    <!-- Order Success Modal -->
+    <UModal v-model:open="showSuccessModal">
+      <template #content>
+        <div class="p-8 bg-white text-center min-w-[400px]" v-if="completedOrder">
+          <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <UIcon name="i-lucide-check" class="w-10 h-10 text-green-600" />
+          </div>
+          <h3 class="text-xl font-bold text-gray-900 mb-1">Order Complete!</h3>
+          <p class="text-sm text-gray-500 mb-6">{{ completedOrder.receiptNumber }}</p>
+
+          <div class="bg-gray-50 rounded-xl p-4 text-left space-y-2 mb-6">
+            <div v-for="item in completedOrder.items" :key="item.id" class="flex justify-between text-sm">
+              <span class="text-gray-600">{{ item.name }} <span v-if="item.variationLabel" class="text-purple-600">({{ item.variationLabel }})</span> × {{ item.quantity }}</span>
+              <span class="font-medium text-gray-900">{{ formatCurrency(item.finalPrice * item.quantity) }}</span>
+            </div>
+            <div class="border-t border-dashed border-gray-300 pt-2 mt-2">
+              <div class="flex justify-between font-bold text-lg">
+                <span>Total</span>
+                <span>{{ formatCurrency(completedOrder.total) }}</span>
+              </div>
+            </div>
+            <div class="flex justify-between text-sm text-gray-500">
+              <span>Method</span>
+              <span class="capitalize font-medium">{{ completedOrder.paymentMethod }}</span>
+            </div>
+            <div v-if="completedOrder.change > 0" class="flex justify-between text-sm text-green-600">
+              <span>Change</span>
+              <span class="font-bold">{{ formatCurrency(completedOrder.change) }}</span>
+            </div>
+          </div>
+
+          <button
+            @click="startNewOrder"
+            class="w-full py-4 rounded-xl bg-[#1E293B] text-white font-bold text-lg hover:bg-[#334155] transition-colors"
+          >
+            New Order
+          </button>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>
 

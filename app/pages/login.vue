@@ -3,18 +3,43 @@ definePageMeta({
   layout: 'default'
 })
 
+const client = useSupabaseClient()
 const email = ref('')
-const pin = ref('')
+const password = ref('')
 const loading = ref(false)
+const errorMsg = ref('')
 
-const handleLogin = () => {
+const handleLogin = async () => {
   loading.value = true
-  // Simulate network request
-  setTimeout(() => {
-    localStorage.setItem('isAuthenticated', 'true')
-    navigateTo('/cashier')
+  errorMsg.value = ''
+
+  try {
+    const { data, error } = await client.auth.signInWithPassword({
+      email: email.value,
+      password: password.value
+    })
+
+    if (error) throw error
+
+    // Fetch profile to determine redirect
+    const { data: profile } = await client
+      .from('profiles')
+      .select('onboarding_completed, role')
+      .eq('id', data.user.id)
+      .single()
+
+    if (profile && !profile.onboarding_completed) {
+      navigateTo('/onboarding')
+    } else if (profile?.role === 'cashier') {
+      navigateTo('/cashier')
+    } else {
+      navigateTo('/backoffice')
+    }
+  } catch (err: any) {
+    errorMsg.value = err.message || 'Invalid email or password.'
+  } finally {
     loading.value = false
-  }, 800)
+  }
 }
 </script>
 
@@ -25,25 +50,28 @@ const handleLogin = () => {
         <UIcon name="i-lucide-box" class="w-8 h-8" />
       </div>
       <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">Komo POS</h1>
-      <p class="text-gray-500 dark:text-gray-400 text-sm">Sign in with your admin or cashier PIN</p>
+      <p class="text-gray-500 dark:text-gray-400 text-sm">Sign in to your account</p>
     </div>
-    
+
+    <UAlert v-if="errorMsg" color="error" variant="soft" :title="errorMsg" icon="i-lucide-alert-circle" class="rounded-xl" />
+
     <form @submit.prevent="handleLogin" class="flex flex-col gap-4 mt-2">
-      <UFormGroup label="Email address or Employee ID" name="email">
-        <UInput v-model="email" type="text" placeholder="admin@komopos.com" icon="i-lucide-user" size="lg" required />
+      <UFormGroup label="Email Address" name="email">
+        <UInput v-model="email" type="email" placeholder="admin@komopos.com" icon="i-lucide-mail" size="lg" required />
       </UFormGroup>
-      
-      <UFormGroup label="Security PIN" name="pin">
-        <UInput v-model="pin" type="password" placeholder="••••" icon="i-lucide-lock" size="lg" required />
+
+      <UFormGroup label="Password" name="password">
+        <UInput v-model="password" type="password" placeholder="••••••••" icon="i-lucide-lock" size="lg" required />
       </UFormGroup>
-      
+
       <UButton type="submit" color="primary" block size="lg" class="mt-4 rounded-xl font-bold text-lg h-12" :loading="loading">
         Sign In
       </UButton>
     </form>
-    
+
     <div class="text-center text-sm text-gray-500 dark:text-gray-400 mt-2">
-      Need help signing in? <a href="#" class="text-primary font-semibold hover:underline">Contact Support</a>
+      Don't have an account?
+      <NuxtLink to="/register" class="text-primary font-semibold hover:underline">Register here</NuxtLink>
     </div>
   </div>
 </template>

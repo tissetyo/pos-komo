@@ -10,17 +10,24 @@ create table public.outlets (
   id uuid default uuid_generate_v4() primary key,
   name text not null,
   address text,
+  city text,
+  timezone text default 'Asia/Jakarta',
+  store_type text,
+  currency text default 'IDR',
   phone text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- 2. Create Profiles Table (extends auth.users)
 create table public.profiles (
-  id uuid references auth.users not null primary key,
+  id uuid references auth.users on delete cascade not null primary key,
   email text,
   full_name text,
-  role text check (role in ('admin', 'manager', 'cashier', 'kitchen')),
+  role text default 'admin' check (role in ('admin', 'manager', 'cashier', 'kitchen')),
   outlet_id uuid references public.outlets,
+  pin text,
+  onboarding_completed boolean default false,
+  onboarding_step integer default 1,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -91,6 +98,28 @@ create table public.order_items (
 );
 
 -- --------------------------------------------------------
+-- Auto-create profile on signup
+-- --------------------------------------------------------
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, email, full_name, role)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'full_name', ''),
+    coalesce(new.raw_user_meta_data->>'role', 'admin')
+  );
+  return new;
+end;
+$$ language plpgsql security definer;
+
+-- Trigger on auth.users insert
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- --------------------------------------------------------
 -- RLS Policies Setup (Row Level Security)
 -- --------------------------------------------------------
 alter table public.outlets enable row level security;
@@ -101,20 +130,38 @@ alter table public.customers enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 
--- Basic read-all policies for authenticated users
+-- Outlets: authenticated users can read, insert, update
 create policy "Enable read access for authenticated users" on public.outlets for select using (auth.role() = 'authenticated');
-create policy "Enable read access for authenticated users" on public.profiles for select using (auth.role() = 'authenticated');
-create policy "Enable read access for authenticated users" on public.categories for select using (auth.role() = 'authenticated');
-create policy "Enable read access for authenticated users" on public.products for select using (auth.role() = 'authenticated');
-create policy "Enable read access for authenticated users" on public.customers for select using (auth.role() = 'authenticated');
-create policy "Enable read access for authenticated users" on public.orders for select using (auth.role() = 'authenticated');
-create policy "Enable read access for authenticated users" on public.order_items for select using (auth.role() = 'authenticated');
+create policy "Enable insert for authenticated users" on public.outlets for insert with check (auth.role() = 'authenticated');
+create policy "Enable update for authenticated users" on public.outlets for update using (auth.role() = 'authenticated');
 
--- Basic insert policies for authenticated users
+-- Profiles: users can read all profiles, but only update their own
+create policy "Enable read access for authenticated users" on public.profiles for select using (auth.role() = 'authenticated');
+create policy "Enable insert for service role" on public.profiles for insert with check (true);
+create policy "Enable update own profile" on public.profiles for update using (auth.uid() = id);
+
+-- Categories
+create policy "Enable read access for authenticated users" on public.categories for select using (auth.role() = 'authenticated');
 create policy "Enable insert for authenticated users" on public.categories for insert with check (auth.role() = 'authenticated');
+create policy "Enable update for authenticated users" on public.categories for update using (auth.role() = 'authenticated');
+create policy "Enable delete for authenticated users" on public.categories for delete using (auth.role() = 'authenticated');
+
+-- Products
+create policy "Enable read access for authenticated users" on public.products for select using (auth.role() = 'authenticated');
 create policy "Enable insert for authenticated users" on public.products for insert with check (auth.role() = 'authenticated');
-create policy "Enable insert for authenticated users" on public.customers for insert with check (auth.role() = 'authenticated');
-create policy "Enable insert for authenticated users" on public.orders for insert with check (auth.role() = 'authenticated');
-create policy "Enable insert for authenticated users" on public.order_items for insert with check (auth.role() = 'authenticated');
-create policy "Enable update for authenticated users" on public.orders for update using (auth.role() = 'authenticated');
 create policy "Enable update for authenticated users" on public.products for update using (auth.role() = 'authenticated');
+create policy "Enable delete for authenticated users" on public.products for delete using (auth.role() = 'authenticated');
+
+-- Customers
+create policy "Enable read access for authenticated users" on public.customers for select using (auth.role() = 'authenticated');
+create policy "Enable insert for authenticated users" on public.customers for insert with check (auth.role() = 'authenticated');
+create policy "Enable update for authenticated users" on public.customers for update using (auth.role() = 'authenticated');
+
+-- Orders
+create policy "Enable read access for authenticated users" on public.orders for select using (auth.role() = 'authenticated');
+create policy "Enable insert for authenticated users" on public.orders for insert with check (auth.role() = 'authenticated');
+create policy "Enable update for authenticated users" on public.orders for update using (auth.role() = 'authenticated');
+
+-- Order Items
+create policy "Enable read access for authenticated users" on public.order_items for select using (auth.role() = 'authenticated');
+create policy "Enable insert for authenticated users" on public.order_items for insert with check (auth.role() = 'authenticated');

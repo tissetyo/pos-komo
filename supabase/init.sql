@@ -15,6 +15,12 @@ create table public.outlets (
   store_type text,
   currency text default 'IDR',
   phone text,
+  sst integer default 6,
+  service_charge integer default 10,
+  tax_id text,
+  logo_url text,
+  receipt_header text,
+  receipt_footer text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

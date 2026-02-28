@@ -139,6 +139,12 @@ const saveSettings = async () => {
       store_type: storeInfo.value.store_type,
       currency: operations.value.currency,
       timezone: operations.value.timezone,
+      sst: operations.value.sst,
+      service_charge: operations.value.serviceCharge,
+      tax_id: storeInfo.value.tax_id,
+      logo_url: finalLogoUrl,
+      receipt_header: receipts.value.header,
+      receipt_footer: receipts.value.footer
     }).eq('id', outletId.value)
 
     saveSuccess.value = true

@@ -84,6 +84,128 @@ const formatPrice = (price: number) => price.toLocaleString('en-MY')
 
 const totalActive = computed(() => products.value.filter(p => p.visible).length)
 const totalStock = computed(() => products.value.reduce((s, p) => s + (p.stock || 0), 0))
+
+// --- CSV Import ---
+const fileInput = ref<HTMLInputElement | null>(null)
+const importing = ref(false)
+
+const triggerImport = () => {
+  if (fileInput.value) fileInput.value.click()
+}
+
+const parseCSVRow = (rawRow: string) => {
+  const row: string[] = []
+  let inQuotes = false
+  let currentVal = ''
+  
+  for (let i = 0; i < rawRow.length; i++) {
+    const char = rawRow[i]
+    if (char === '"') {
+      if (inQuotes && rawRow[i + 1] === '"') {
+        currentVal += '"' // Escaped quote
+        i++ 
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (char === ',' && !inQuotes) {
+      row.push(currentVal.trim())
+      currentVal = ''
+    } else {
+      currentVal += char
+    }
+  }
+  row.push(currentVal.trim())
+  return row
+}
+
+const handleCSVUpload = async (e: Event) => {
+  const target = e.target as HTMLInputElement
+  if (!target.files || !target.files[0]) return
+  
+  const file = target.files[0]
+  if (!outletId.value) return
+  
+  importing.value = true
+  try {
+    const text = await file.text()
+    const rawLines = text.split('\n').filter(l => l.trim().length > 0)
+    
+    // Skip empty and skip header (row 1 is columns, row 2 is guide)
+    // Actually from sample: row 1 is SKU,Parent Product SKU... row 2 is #Required... row 3 is data
+    let headerIdx = -1
+    for (let i = 0; i < rawLines.length; i++) {
+      if (rawLines[i].startsWith('SKU,')) {
+        headerIdx = i
+        break
+      }
+    }
+    
+    if (headerIdx === -1) {
+      alert('Invalid CSV format. Missing "SKU" header.')
+      return
+    }
+    
+    // We start processing from the row AFTER the instructions
+    const dataRows = rawLines.slice(headerIdx + 2)
+    
+    const newProducts = []
+    
+    for (const rawLine of dataRows) {
+      const row = parseCSVRow(rawLine)
+      if (row.length < 5) continue
+      
+      const sku = row[0]
+      const name = row[2]
+      const categoryName = row[3] || 'Uncategorized'
+      const priceStr = row[6] // Tax-Exclusive Price
+      const costStr = row[9] // Cost
+      
+      if (!name) continue
+      
+      const price = Math.round(parseFloat(priceStr || '0'))
+      const cost = costStr ? Math.round(parseFloat(costStr || '0')) : null
+      
+      // Category resolution
+      let catId = null
+      if (categoryName) {
+        let cat = categories.value.find(c => c.name.toLowerCase() === categoryName.toLowerCase())
+        if (!cat) {
+          const { data: newCat } = await client.from('categories').insert({ name: categoryName, outlet_id: outletId.value }).select().single()
+          if (newCat) {
+            categories.value.push(newCat)
+            cat = newCat
+          }
+        }
+        if (cat) catId = cat.id
+      }
+      
+      newProducts.push({
+        sku,
+        name,
+        price,
+        cost,
+        category_id: catId,
+        outlet_id: outletId.value,
+        is_active: true
+      })
+    }
+    
+    if (newProducts.length > 0) {
+      const { error } = await client.from('products').insert(newProducts)
+      if (error) throw error
+      alert(`Successfully imported ${newProducts.length} products.`)
+      await fetchProducts()
+    } else {
+      alert('No valid products found to import.')
+    }
+    
+  } catch (err: any) {
+    alert('Import failed: ' + err.message)
+  } finally {
+    importing.value = false
+    if (fileInput.value) fileInput.value.value = ''
+  }
+}
 </script>
 
 <template>
@@ -93,7 +215,11 @@ const totalStock = computed(() => products.value.reduce((s, p) => s + (p.stock |
         <h2 class="text-2xl font-bold text-gray-900">Products & Menu</h2>
         <p class="text-gray-500 text-sm mt-1">Manage your catalogue, pricing, inventory, and variants.</p>
       </div>
-      <UButton to="/backoffice/products/new" color="primary" label="+ New Product" icon="i-lucide-plus" />
+      <div class="flex items-center gap-3">
+        <input type="file" accept=".csv" class="hidden" ref="fileInput" @change="handleCSVUpload" />
+        <UButton color="neutral" variant="outline" label="Import CSV" icon="i-lucide-upload" :loading="importing" @click="triggerImport" />
+        <UButton to="/backoffice/products/new" color="primary" label="+ New Product" icon="i-lucide-plus" />
+      </div>
     </div>
 
     <!-- Pro Tip -->

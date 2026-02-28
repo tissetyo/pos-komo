@@ -235,7 +235,7 @@ const processPayment = async () => {
         payment_status: 'paid',
         order_status: 'completed',
         order_type: orderType.value
-      })
+      } as any)
       .select()
       .single()
 
@@ -512,25 +512,39 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
             <div
               v-for="product in filteredProducts"
               :key="product.id"
-              class="bg-[#162456] rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1 group flex flex-col"
+              class="bg-white rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1 border border-gray-100 flex flex-col group relative"
+              :class="{ '!bg-[#162456] !border-[#162456]': !product.image }"
               @click="handleProductClick(product)"
             >
-              <div class="aspect-[4/3] w-full relative overflow-hidden">
-                <img v-if="product.image" :src="product.image" :alt="product.name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                <div v-else class="w-full h-full flex items-center justify-center bg-[#1d2f6b]">
-                  <UIcon name="i-lucide-coffee" class="w-12 h-12 text-blue-300/30" />
+              <!-- With Image -->
+              <template v-if="product.image">
+                <div class="aspect-[4/3] w-full relative overflow-hidden">
+                  <img :src="product.image" :alt="product.name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <span class="absolute top-3 left-3 bg-emerald-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md">
+                    {{ formatPrice(product.price) }}
+                  </span>
+                  <span v-if="product.variations.length > 0" class="absolute top-3 right-3 bg-[#162456] text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
+                    {{ product.variations.length }} options
+                  </span>
                 </div>
-                <span class="absolute top-3 left-3 bg-emerald-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md">
-                  {{ formatPrice(product.price) }}
-                </span>
-                <span v-if="product.variations.length > 0" class="absolute top-3 right-3 bg-purple-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
-                  {{ product.variations.length }} options
-                </span>
-              </div>
-              <div class="p-3">
-                <h3 class="font-semibold text-white text-sm leading-tight line-clamp-1">{{ product.name }}</h3>
-                <p class="text-blue-200/50 text-xs mt-1 line-clamp-1">{{ product.description || product.category }}</p>
-              </div>
+                <div class="p-3 bg-white flex-1 flex flex-col">
+                  <h3 class="font-semibold text-gray-900 text-sm leading-tight line-clamp-2 group-hover:text-[#162456] transition-colors">{{ product.name }}</h3>
+                  <p class="text-gray-400 text-[11px] mt-1 line-clamp-1 flex-1">{{ product.description || product.category }}</p>
+                </div>
+              </template>
+
+              <!-- No Image (Solid Blue Card) -->
+              <template v-else>
+                <div class="w-full h-full flex items-center justify-center p-4 min-h-[140px] relative">
+                  <h3 class="font-bold text-white text-lg leading-tight text-center p-2">{{ product.name }}</h3>
+                  <span class="absolute bottom-3 left-3 bg-[#0a1128]/80 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-lg">
+                    {{ formatPrice(product.price) }}
+                  </span>
+                  <span v-if="product.variations.length > 0" class="absolute top-3 right-3 bg-[#0a1128]/80 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                    {{ product.variations.length }} options
+                  </span>
+                </div>
+              </template>
             </div>
           </div>
         </div>

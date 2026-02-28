@@ -54,18 +54,32 @@ const removeOption = (varIndex: number, optIndex: number) => {
   variations.value[varIndex].options.splice(optIndex, 1)
 }
 
-onMounted(async () => {
-  if (!user.value) return
+const loadProfile = async () => {
+  if (!user.value?.id) return
   const { data: profile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
   outletId.value = profile?.outlet_id || null
   if (!outletId.value) return
 
   const { data: cats } = await client.from('categories').select('id, name').eq('outlet_id', outletId.value)
   categories.value = cats || []
-})
+}
+
+onMounted(loadProfile)
+
+// Retry if user wasn't ready at mount
+watch(user, (val) => {
+  if (val?.id && !outletId.value) loadProfile()
+}, { immediate: false })
 
 const saveProduct = async () => {
-  if (!form.value.name || !form.value.price || !outletId.value) return
+  if (!form.value.name) { alert('Please enter a product name'); return }
+  if (!form.value.price) { alert('Please enter a price'); return }
+
+  // Retry getting outletId if it's not set
+  if (!outletId.value && user.value?.id) {
+    await loadProfile()
+  }
+  if (!outletId.value) { alert('Could not determine your store. Please reload the page and try again.'); return }
   saving.value = true
   try {
     // 1. Resolve or create category

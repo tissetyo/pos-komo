@@ -8,19 +8,32 @@ const user = useSupabaseUser()
 
 // Data from Supabase
 const products = ref<any[]>([])
-const categories = ref<string[]>(['All'])
-const activeCategory = ref('All')
+const categories = ref<string[]>(['All Items'])
+const activeCategory = ref('All Items')
 const searchQuery = ref('')
 const loading = ref(true)
 const outletId = ref<string | null>(null)
+
+// Category icons
+const categoryIcons: Record<string, string> = {
+  'All Items': 'i-lucide-grid',
+  'Coffee': 'i-lucide-coffee',
+  'Tea': 'i-lucide-cup-soda',
+  'Pastries': 'i-lucide-cake-slice',
+  'Main Course': 'i-lucide-utensils-crossed',
+  'Desserts': 'i-lucide-ice-cream-cone',
+  'Cold Drinks': 'i-lucide-glass-water',
+  'Other': 'i-lucide-package',
+}
 
 // Order State
 const orderItems = ref<any[]>([])
 const isCharging = ref(false)
 const orderCompleted = ref(false)
+const orderNumber = ref('#3820')
 
 const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount)
+  return 'MYR' + amount.toFixed(2)
 }
 
 // Load products from Supabase
@@ -44,6 +57,7 @@ onMounted(async () => {
     products.value = (data || []).map((p: any) => ({
       id: p.id,
       name: p.name,
+      description: p.description || '',
       price: p.price,
       category: p.categories?.name || 'Other',
       image: p.image_url || null,
@@ -52,7 +66,7 @@ onMounted(async () => {
 
     // Build categories
     const cats = new Set(products.value.map(p => p.category))
-    categories.value = ['All', ...Array.from(cats)]
+    categories.value = ['All Items', ...Array.from(cats)]
   } finally {
     loading.value = false
   }
@@ -60,22 +74,23 @@ onMounted(async () => {
 
 const filteredProducts = computed(() => {
   return products.value.filter(p => {
-    const matchCategory = activeCategory.value === 'All' || p.category === activeCategory.value
+    const matchCategory = activeCategory.value === 'All Items' || p.category === activeCategory.value
     const matchSearch = p.name.toLowerCase().includes(searchQuery.value.toLowerCase())
     return matchCategory && matchSearch
   })
 })
 
 const subtotal = computed(() => orderItems.value.reduce((acc, item) => acc + (item.price * item.quantity), 0))
-const tax = computed(() => Math.round(subtotal.value * 0.11))
-const total = computed(() => subtotal.value + tax.value)
+const discount = computed(() => 0)
+const tax = computed(() => Math.round(subtotal.value * 0.10 * 100) / 100)
+const total = computed(() => subtotal.value - discount.value + tax.value)
 
 const addToOrder = (product: any) => {
   const existing = orderItems.value.find(item => item.id === product.id)
   if (existing) {
     existing.quantity++
   } else {
-    orderItems.value.push({ id: product.id, name: product.name, price: product.price, quantity: 1 })
+    orderItems.value.push({ id: product.id, name: product.name, price: product.price, quantity: 1, image: product.image })
   }
 }
 
@@ -99,10 +114,8 @@ const chargeOrder = async () => {
   isCharging.value = true
 
   try {
-    // Generate receipt number
     const receiptNumber = 'TRX-' + Date.now().toString().slice(-6)
 
-    // Create order
     const { data: order, error: orderErr } = await client
       .from('orders')
       .insert({
@@ -123,7 +136,6 @@ const chargeOrder = async () => {
 
     if (orderErr) throw orderErr
 
-    // Create order items
     const items = orderItems.value.map(item => ({
       order_id: order.id,
       product_id: item.id,
@@ -150,33 +162,56 @@ const chargeOrder = async () => {
 
 <template>
   <div class="flex h-full w-full">
-    <!-- Main Menu Area -->
-    <div class="flex-1 flex flex-col p-4 md:p-6 overflow-hidden">
-      <!-- Search & Filters -->
-      <div class="flex flex-col md:flex-row gap-4 mb-6">
-        <UInput
-          v-model="searchQuery"
-          icon="i-lucide-search"
-          placeholder="Search products..."
-          size="lg"
-          class="flex-1 max-w-md shadow-sm"
-        />
-        <div class="flex overflow-x-auto pb-2 -mb-2 hide-scrollbar gap-2 flex-1">
-          <UButton
-            v-for="cat in categories"
-            :key="cat"
-            :label="cat"
-            :color="activeCategory === cat ? 'primary' : 'neutral'"
-            variant="solid"
-            class="rounded-full px-5 py-2 font-medium whitespace-nowrap transition-colors"
-            @click="activeCategory = cat"
-          />
+    <!-- Left Sidebar: Categories -->
+    <aside class="w-44 bg-white border-r border-gray-200 flex flex-col shrink-0">
+      <div class="px-4 py-4">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Categories</p>
+      </div>
+      <nav class="flex-1 px-2 space-y-1 overflow-y-auto">
+        <button
+          v-for="cat in categories"
+          :key="cat"
+          @click="activeCategory = cat"
+          :class="[
+            'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left',
+            activeCategory === cat
+              ? 'bg-[#1E293B] text-white shadow-md'
+              : 'text-gray-600 hover:bg-gray-100'
+          ]"
+        >
+          <UIcon :name="categoryIcons[cat] || 'i-lucide-tag'" class="w-5 h-5 flex-shrink-0" />
+          {{ cat }}
+        </button>
+      </nav>
+
+      <!-- Need Help -->
+      <div class="p-3 mt-auto">
+        <button class="w-full flex items-center gap-2 px-3 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-medium hover:bg-emerald-100 transition-colors">
+          <UIcon name="i-lucide-headphones" class="w-5 h-5" />
+          <div class="text-left">
+            <p class="font-semibold text-xs">Need Help?</p>
+            <p class="text-[10px] text-emerald-600">Contact Manager</p>
+          </div>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Center: Product Grid -->
+    <div class="flex-1 flex flex-col p-5 overflow-hidden bg-gray-50/50">
+      <!-- Title + Badge -->
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-xl font-bold text-gray-900">Choose Order</h2>
+          <p class="text-sm text-gray-500">Select items to add to the current order</p>
         </div>
+        <span class="bg-emerald-50 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-emerald-200">
+          Showing {{ filteredProducts.length }} items
+        </span>
       </div>
 
       <!-- Loading state -->
       <div v-if="loading" class="flex-1 flex items-center justify-center">
-        <div class="text-center text-gray-400 dark:text-gray-500">
+        <div class="text-center text-gray-400">
           <UIcon name="i-lucide-loader-2" class="w-8 h-8 animate-spin mx-auto mb-2" />
           <p>Loading products...</p>
         </div>
@@ -184,7 +219,7 @@ const chargeOrder = async () => {
 
       <!-- Empty state -->
       <div v-else-if="filteredProducts.length === 0" class="flex-1 flex items-center justify-center">
-        <div class="text-center text-gray-400 dark:text-gray-500">
+        <div class="text-center text-gray-400">
           <UIcon name="i-lucide-package" class="w-12 h-12 mx-auto mb-3 opacity-40" />
           <p class="text-lg font-medium mb-1">No products found</p>
           <p class="text-sm">Add products from the backoffice to start selling.</p>
@@ -193,116 +228,139 @@ const chargeOrder = async () => {
       </div>
 
       <!-- Product Grid -->
-      <div v-else class="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+      <div v-else class="flex-1 overflow-y-auto pr-1 custom-scrollbar">
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <div
             v-for="product in filteredProducts"
             :key="product.id"
-            class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden cursor-pointer hover:shadow-md transition-shadow duration-200 transform hover:-translate-y-1 group flex flex-col h-full"
+            class="bg-[#1E293B] rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1 group flex flex-col"
             @click="addToOrder(product)"
           >
-            <div class="aspect-square w-full relative overflow-hidden bg-gray-100 dark:bg-gray-800">
+            <!-- Product Image -->
+            <div class="aspect-[4/3] w-full relative overflow-hidden">
               <img v-if="product.image" :src="product.image" :alt="product.name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-              <div v-else class="w-full h-full flex items-center justify-center">
-                <UIcon name="i-lucide-coffee" class="w-12 h-12 text-gray-300 dark:text-gray-600" />
+              <div v-else class="w-full h-full flex items-center justify-center bg-[#2d3a4f]">
+                <UIcon name="i-lucide-coffee" class="w-12 h-12 text-gray-500" />
               </div>
+              <!-- Price Badge -->
+              <span class="absolute top-3 left-3 bg-emerald-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md">
+                {{ formatCurrency(product.price) }}
+              </span>
             </div>
-            <div class="p-3 flex flex-col flex-1 justify-between">
-              <div>
-                <div class="text-xs text-primary font-semibold mb-1 uppercase tracking-wider">{{ product.category }}</div>
-                <h3 class="font-semibold text-gray-800 dark:text-gray-200 leading-tight text-sm md:text-base line-clamp-2">{{ product.name }}</h3>
-              </div>
-              <div class="mt-2 font-bold text-gray-900 dark:text-white">{{ formatCurrency(product.price) }}</div>
+            <!-- Product Info -->
+            <div class="p-3">
+              <h3 class="font-semibold text-white text-sm leading-tight line-clamp-1">{{ product.name }}</h3>
+              <p class="text-gray-400 text-xs mt-1 line-clamp-1">{{ product.description || product.category }}</p>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Right Sidebar - Order Summary -->
-    <div class="w-80 md:w-96 lg:w-[400px] bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 flex flex-col shrink-0 shadow-lg z-20">
+    <!-- Right Sidebar: Order Summary -->
+    <div class="w-80 lg:w-96 bg-white border-l border-gray-200 flex flex-col shrink-0">
       <!-- Order Header -->
-      <div class="px-6 py-4 flex items-center justify-between border-b border-gray-100 dark:border-gray-800">
-        <div>
-          <h2 class="font-bold text-lg text-gray-900 dark:text-white">Current Order</h2>
-          <p class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-1">
-            <UIcon name="i-lucide-user" class="w-3 h-3" /> Walk-in Customer
-          </p>
+      <div class="px-5 py-4 border-b border-gray-100">
+        <div class="flex items-center justify-between">
+          <h2 class="font-bold text-lg text-gray-900">Current Order</h2>
+          <span class="bg-[#1E293B] text-white text-xs font-bold w-8 h-8 rounded-lg flex items-center justify-center">
+            DI
+          </span>
         </div>
+        <p class="text-xs text-gray-500 mt-1">Order {{ orderNumber }} • Dine-in</p>
       </div>
 
       <!-- Order Items List -->
-      <div class="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar space-y-3">
-        <div v-if="orderItems.length === 0" class="flex flex-col items-center justify-center h-full text-center text-gray-400 dark:text-gray-500 space-y-4">
-          <UIcon name="i-lucide-shopping-cart" class="w-12 h-12 text-gray-200 dark:text-gray-700" />
-          <p>Order is empty.<br>Select items from the menu to get started.</p>
+      <div class="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar space-y-3">
+        <div v-if="orderItems.length === 0 && !orderCompleted" class="flex flex-col items-center justify-center h-full text-center text-gray-400 space-y-4">
+          <UIcon name="i-lucide-shopping-cart" class="w-12 h-12 text-gray-200" />
+          <p class="text-sm">Order is empty.<br>Select items from the menu.</p>
         </div>
 
         <!-- Success message -->
         <div v-if="orderCompleted" class="flex flex-col items-center justify-center h-full text-center space-y-4">
-          <div class="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-green-600">
+          <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-600">
             <UIcon name="i-lucide-check" class="w-8 h-8" />
           </div>
           <p class="text-green-600 font-semibold text-lg">Order Complete!</p>
         </div>
 
-        <div v-for="item in orderItems" :key="item.id" class="flex gap-3 bg-gray-50/50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
-          <!-- Qty Controls -->
-          <div class="flex flex-col items-center justify-between bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden w-10">
-            <button class="w-full h-8 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100" @click.stop="updateQuantity(item, 1)">
-              <UIcon name="i-lucide-plus" class="w-4 h-4" />
-            </button>
-            <div class="font-semibold text-sm text-gray-900 dark:text-white">{{ item.quantity }}</div>
-            <button class="w-full h-8 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100" @click.stop="updateQuantity(item, -1)">
-              <UIcon name="i-lucide-minus" class="w-4 h-4" />
-            </button>
-          </div>
-
-          <!-- Item Details -->
-          <div class="flex-1 min-w-0 flex flex-col justify-center">
-            <div class="flex justify-between items-start gap-2">
-              <h4 class="font-semibold text-sm text-gray-800 dark:text-gray-200 leading-tight truncate">{{ item.name }}</h4>
-              <div class="font-medium text-sm text-gray-900 dark:text-white whitespace-nowrap">{{ formatCurrency(item.price * item.quantity) }}</div>
+        <!-- Order Items -->
+        <div v-for="item in orderItems" :key="item.id" class="flex items-center gap-3">
+          <!-- Product Thumbnail -->
+          <div class="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+            <img v-if="item.image" :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
+            <div v-else class="w-full h-full flex items-center justify-center">
+              <UIcon name="i-lucide-coffee" class="w-5 h-5 text-gray-400" />
             </div>
+          </div>
+          <!-- Details -->
+          <div class="flex-1 min-w-0">
+            <h4 class="font-semibold text-sm text-gray-900 truncate">{{ item.name }}</h4>
+            <p class="text-xs text-gray-500">{{ formatCurrency(item.price) }}</p>
+          </div>
+          <!-- Qty Controls -->
+          <div class="flex items-center gap-2 bg-gray-50 rounded-lg border border-gray-200 px-1 py-0.5">
+            <button class="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-200 rounded transition-colors" @click.stop="updateQuantity(item, -1)">
+              <UIcon name="i-lucide-minus" class="w-3.5 h-3.5" />
+            </button>
+            <span class="w-6 text-center text-sm font-semibold text-gray-900">{{ item.quantity }}</span>
+            <button class="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-200 rounded transition-colors" @click.stop="updateQuantity(item, 1)">
+              <UIcon name="i-lucide-plus" class="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </div>
 
-      <!-- Totals & Payment -->
-      <div class="p-6 bg-gray-50/80 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700">
-        <div class="space-y-2 mb-6">
-          <div class="flex justify-between text-gray-600 dark:text-gray-400 text-sm">
-            <span>Subtotal</span>
-            <span class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(subtotal) }}</span>
+      <!-- Totals & Actions -->
+      <div class="border-t border-gray-200 p-5">
+        <!-- Breakdown -->
+        <div class="space-y-2 mb-4">
+          <div class="flex justify-between text-sm">
+            <span class="text-gray-500">Subtotal</span>
+            <span class="font-medium text-gray-900">{{ formatCurrency(subtotal) }}</span>
           </div>
-          <div class="flex justify-between text-gray-600 dark:text-gray-400 text-sm">
-            <span>Tax (11%)</span>
-            <span class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(tax) }}</span>
+          <div class="flex justify-between text-sm">
+            <span class="text-gray-500">Discount</span>
+            <span class="font-medium text-gray-900">{{ formatCurrency(discount) }}</span>
           </div>
-          <div class="border-t border-gray-200 dark:border-gray-700 border-dashed my-2 pt-2 flex justify-between items-center">
-            <span class="font-semibold text-gray-900 dark:text-white">Total</span>
-            <span class="font-bold text-2xl text-primary drop-shadow-sm">{{ formatCurrency(total) }}</span>
+          <div class="flex justify-between text-sm">
+            <span class="text-gray-500">Tax (10%)</span>
+            <span class="font-medium text-gray-900">{{ formatCurrency(tax) }}</span>
+          </div>
+          <div class="border-t border-dashed border-gray-200 my-2 pt-2">
+            <div class="flex justify-between items-center">
+              <span class="font-semibold text-gray-900">Total</span>
+              <span class="font-bold text-2xl text-gray-900">{{ formatCurrency(total) }}</span>
+            </div>
           </div>
         </div>
 
-        <div class="flex gap-3">
-          <UButton
-            v-if="orderItems.length > 0"
-            color="error"
-            variant="soft"
-            icon="i-lucide-trash-2"
-            class="rounded-xl h-14 w-14 justify-center"
-            @click="clearOrder"
-          />
-          <UButton
-            label="Charge"
-            color="primary"
-            class="rounded-xl h-14 flex-1 text-lg font-bold shadow-md shadow-primary/20 hover:shadow-primary/40 transition-shadow"
+        <!-- Action Buttons -->
+        <div class="flex gap-3 mb-3">
+          <button
+            class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors"
             :disabled="orderItems.length === 0"
-            :loading="isCharging"
-            @click="chargeOrder"
-          />
+          >
+            <UIcon name="i-lucide-pause" class="w-4 h-4" />
+            Hold Order
+          </button>
+          <button
+            class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors"
+          >
+            <UIcon name="i-lucide-file-text" class="w-4 h-4" />
+            Add Note
+          </button>
         </div>
+
+        <button
+          @click="chargeOrder"
+          class="w-full flex items-center justify-center gap-3 py-4 rounded-xl bg-[#1E293B] text-white font-bold text-lg hover:bg-[#334155] transition-colors disabled:opacity-50"
+          :disabled="orderItems.length === 0 || isCharging"
+        >
+          <UIcon name="i-lucide-wallet" class="w-5 h-5" />
+          Checkout
+        </button>
       </div>
     </div>
   </div>
@@ -319,12 +377,5 @@ const chargeOrder = async () => {
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: #cbd5e1;
   border-radius: 20px;
-}
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.hide-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
 }
 </style>

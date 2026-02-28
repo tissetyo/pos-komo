@@ -7,28 +7,52 @@ const loading = ref(true)
 const saving = ref(false)
 
 const settingsTabs = [
-  { label: 'General Info', id: 'general' },
-  { label: 'Feature Toggles', id: 'toggles' }
+  { label: 'Store Profile', id: 'profile', icon: 'i-lucide-building' },
+  { label: 'Operations', id: 'operations', icon: 'i-lucide-settings-2' },
+  { label: 'Receipts', id: 'receipts', icon: 'i-lucide-receipt' },
+  { label: 'Security & Roles', id: 'security', icon: 'i-lucide-shield' },
+  { label: 'Integrations', id: 'integrations', icon: 'i-lucide-puzzle' },
 ]
-const activeTab = ref('general')
+const activeTab = ref('profile')
 
-// General Info
+// Store Profile
 const storeInfo = ref({
-  name: '',
-  phone: '',
-  address: '',
-  timezone: 'Asia/Jakarta',
-  storeType: 'Kafe/Coffee Shop'
+  name: 'Main Street Cafe',
+  taxId: 'W10-1808-32000001',
+  address: 'Lot 1.23, Main Street Mall, Jalan Sultan Ismail, 50250 Kuala Lumpur, Malaysia',
+  phone: '+60 3-2141 1234',
+  email: 'hello@mainstreetcafe.com',
 })
 const outletId = ref<string | null>(null)
 
-// Feature Toggles
-const toggles = ref([
-  { id: 'realtime', name: 'Real-time Kitchen Status', desc: 'Enable WebSocket connection between cashier and kitchen display.', enabled: true, module: 'Cashier' },
-  { id: 'autoprint', name: 'Auto-Print Receipts', desc: 'Automatically print receipt upon payment completion.', enabled: true, module: 'Cashier' },
-  { id: 'cashdrawer', name: 'Cash Drawer Integration', desc: 'Kick open drawer automatically on cash transaction.', enabled: false, module: 'Cashier' },
-  { id: 'analytics', name: 'Analytics Dashboard', desc: 'Show detailed performance and revenue metrics.', enabled: true, module: 'Backoffice' },
-  { id: 'multioutlet', name: 'Multi-Outlet Management', desc: 'Enable switching and managing multiple stores.', enabled: true, module: 'Backoffice' }
+// Operations
+const operations = ref({
+  currency: 'MYR - Malaysian Ringgit',
+  timezone: '(GMT+08:00) Kuala Lumpur, Singapore',
+  sst: 6,
+  serviceCharge: 10,
+})
+
+// Receipts
+const receipts = ref({
+  header: 'Welcome to Main Street Cafe!',
+  footer: 'Thank you for dining with us!',
+  showLogo: true,
+  showSocial: true,
+})
+
+// Roles
+const roles = ref([
+  { name: 'Admin', pos: true, refunds: true, reports: true, settings: true },
+  { name: 'Store Manager', pos: true, refunds: true, reports: true, settings: false },
+  { name: 'Cashier', pos: true, refunds: false, reports: false, settings: false },
+])
+
+// Integrations
+const integrations = ref([
+  { name: 'Kitchen Printer', desc: 'EPSON TM-T82III (192.168.1.102)', status: 'Connected', statusColor: 'text-green-600', icon: 'i-lucide-printer', action: 'Configure' },
+  { name: 'EDC Terminal', desc: 'Maybank Move 2500', status: 'Connected', statusColor: 'text-green-600', icon: 'i-lucide-credit-card', action: 'Configure' },
+  { name: 'Food Delivery', desc: 'GrabFood / FoodPanda Integration', status: 'Disconnected', statusColor: 'text-red-500', icon: 'i-lucide-truck', action: 'Connect' },
 ])
 
 onMounted(async () => {
@@ -40,13 +64,9 @@ onMounted(async () => {
 
     const { data: outlet } = await client.from('outlets').select('*').eq('id', outletId.value).single()
     if (outlet) {
-      storeInfo.value = {
-        name: outlet.name || '',
-        phone: outlet.phone || '',
-        address: outlet.address || '',
-        timezone: outlet.timezone || 'Asia/Jakarta',
-        storeType: outlet.store_type || 'Kafe/Coffee Shop'
-      }
+      storeInfo.value.name = outlet.name || storeInfo.value.name
+      storeInfo.value.phone = outlet.phone || storeInfo.value.phone
+      storeInfo.value.address = outlet.address || storeInfo.value.address
     }
   } finally {
     loading.value = false
@@ -61,8 +81,6 @@ const saveGeneral = async () => {
       name: storeInfo.value.name,
       phone: storeInfo.value.phone,
       address: storeInfo.value.address,
-      timezone: storeInfo.value.timezone,
-      store_type: storeInfo.value.storeType
     }).eq('id', outletId.value)
   } finally {
     saving.value = false
@@ -71,75 +89,229 @@ const saveGeneral = async () => {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto space-y-6">
-    <div>
-      <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Store Settings</h2>
-      <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Configure your POS preferences and feature toggles.</p>
+  <div class="space-y-6">
+    <div class="flex justify-between items-start">
+      <h2 class="text-2xl font-bold text-gray-900">Settings</h2>
+      <UButton v-if="activeTab === 'profile'" color="primary" label="Save changes" @click="saveGeneral" :loading="saving" />
     </div>
 
-    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col md:flex-row overflow-hidden min-h-[600px]">
-
-      <!-- Settings Navigation -->
-      <div class="w-full md:w-64 border-b md:border-b-0 md:border-r border-gray-100 dark:border-gray-800 p-4 bg-gray-50/50 dark:bg-gray-800/30 flex flex-col gap-1">
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm flex overflow-hidden min-h-[700px]">
+      <!-- Settings Navigation (Left side) -->
+      <div class="w-60 border-r border-gray-100 p-4 bg-gray-50/50 flex flex-col gap-1 flex-shrink-0">
         <button
           v-for="tab in settingsTabs"
           :key="tab.id"
           @click="activeTab = tab.id"
           :class="[
-            'text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors',
-            activeTab === tab.id ? 'bg-primary/10 dark:bg-primary/20 text-primary' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+            'flex items-center gap-3 text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors',
+            activeTab === tab.id ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'
           ]"
         >
+          <UIcon :name="tab.icon" class="w-5 h-5" />
           {{ tab.label }}
         </button>
       </div>
 
       <!-- Settings Content -->
-      <div class="flex-1 p-6 md:p-8">
+      <div class="flex-1 p-8 overflow-y-auto">
 
-        <!-- General Info -->
-        <div v-show="activeTab === 'general'" class="space-y-6">
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-800 pb-2 mb-4">General Information</h3>
+        <!-- Store Profile -->
+        <div v-show="activeTab === 'profile'" class="space-y-8 max-w-3xl">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">Store Profile</h3>
+            <p class="text-sm text-gray-500 mt-1">Manage your basic store information and branding.</p>
+          </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <UFormGroup label="Store Name" required>
+          <!-- Logo Upload -->
+          <div class="flex items-center gap-6">
+            <div class="w-20 h-20 bg-gray-100 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300">
+              <UIcon name="i-lucide-image-plus" class="w-8 h-8 text-gray-400" />
+            </div>
+            <div>
+              <p class="font-medium text-gray-900">Store Logo</p>
+              <p class="text-xs text-gray-500 mt-0.5">Recommended size: 512×512px. JPG, PNG supported.</p>
+              <button class="text-sm text-primary mt-1 hover:underline">Upload New Logo</button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-6">
+            <UFormGroup label="Store Name">
               <UInput v-model="storeInfo.name" />
             </UFormGroup>
-            <UFormGroup label="Phone Number">
-              <UInput v-model="storeInfo.phone" />
-            </UFormGroup>
-             <UFormGroup label="Store Address" class="md:col-span-2">
-              <UTextarea v-model="storeInfo.address" autoresize />
-            </UFormGroup>
-            <UFormGroup label="Timezone">
-              <USelect v-model="storeInfo.timezone" :options="['Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura']" />
-            </UFormGroup>
-             <UFormGroup label="Store Type">
-              <USelect v-model="storeInfo.storeType" :options="['Kafe/Coffee Shop', 'Restaurant', 'Food Court', 'Cloud Kitchen']" />
+            <UFormGroup label="Tax ID / SST Registration No.">
+              <UInput v-model="storeInfo.taxId" />
             </UFormGroup>
           </div>
-          <div class="pt-6">
-             <UButton color="primary" label="Save Changes" class="w-full md:w-auto px-8" :loading="saving" @click="saveGeneral" />
+          <UFormGroup label="Address">
+            <UTextarea v-model="storeInfo.address" autoresize />
+          </UFormGroup>
+          <div class="grid grid-cols-2 gap-6">
+            <UFormGroup label="Contact Number">
+              <UInput v-model="storeInfo.phone" />
+            </UFormGroup>
+            <UFormGroup label="Email Address">
+              <UInput v-model="storeInfo.email" type="email" />
+            </UFormGroup>
           </div>
         </div>
 
-        <!-- Feature Toggles -->
-        <div v-show="activeTab === 'toggles'" class="space-y-6">
-          <div class="flex justify-between">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-800 pb-2 mb-2">Feature Toggles</h3>
+        <!-- Operations -->
+        <div v-show="activeTab === 'operations'" class="space-y-8 max-w-3xl">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">Operational Settings</h3>
+            <p class="text-sm text-gray-500 mt-1">Configure currency, taxes, and service charges.</p>
           </div>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Enable or disable specific modules across the POS system.</p>
 
-          <div class="space-y-4">
-            <div v-for="toggle in toggles" :key="toggle.id" class="flex items-start justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
-              <div class="pr-4">
-                <div class="flex items-center gap-2">
-                  <h4 class="font-semibold text-gray-900 dark:text-white">{{ toggle.name }}</h4>
-                  <UBadge color="neutral" variant="soft" size="xs">{{ toggle.module }}</UBadge>
+          <div class="grid grid-cols-2 gap-6">
+            <UFormGroup label="Default Currency">
+              <USelect v-model="operations.currency" :options="['MYR - Malaysian Ringgit', 'SGD - Singapore Dollar', 'USD - US Dollar']" />
+            </UFormGroup>
+            <UFormGroup label="Time Zone">
+              <USelect v-model="operations.timezone" :options="['(GMT+08:00) Kuala Lumpur, Singapore', '(GMT+07:00) Jakarta', '(GMT+09:00) Tokyo']" />
+            </UFormGroup>
+          </div>
+
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-4">Taxes & Fees</h4>
+            <div class="space-y-4">
+              <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                <div class="flex items-center gap-3">
+                  <span class="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center"><UIcon name="i-lucide-check" class="w-4 h-4 text-white" /></span>
+                  <div>
+                    <p class="font-medium text-gray-900">SST (Sales and Service Tax)</p>
+                    <p class="text-xs text-gray-500">Applied to all taxable items</p>
+                  </div>
                 </div>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ toggle.desc }}</p>
+                <div class="flex items-center gap-2">
+                  <UInput v-model.number="operations.sst" class="w-16 text-center" />
+                  <span class="text-gray-500">%</span>
+                </div>
               </div>
-              <UToggle v-model="toggle.enabled" color="primary" class="mt-1 flex-shrink-0" />
+              <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                <div class="flex items-center gap-3">
+                  <span class="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center"><UIcon name="i-lucide-check" class="w-4 h-4 text-white" /></span>
+                  <div>
+                    <p class="font-medium text-gray-900">Service Charge</p>
+                    <p class="text-xs text-gray-500">Applied to dine-in orders only</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <UInput v-model.number="operations.serviceCharge" class="w-16 text-center" />
+                  <span class="text-gray-500">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Receipts -->
+        <div v-show="activeTab === 'receipts'" class="space-y-8 max-w-3xl">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">Receipt Customization</h3>
+            <p class="text-sm text-gray-500 mt-1">Customize how your printed receipts look.</p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-8">
+            <div class="space-y-4">
+              <UFormGroup label="Header Text">
+                <UInput v-model="receipts.header" />
+              </UFormGroup>
+              <UFormGroup label="Footer Text">
+                <UInput v-model="receipts.footer" />
+              </UFormGroup>
+              <div class="flex items-center justify-between py-3">
+                <span class="text-sm text-gray-700">Show Logo on Receipt</span>
+                <UToggle v-model="receipts.showLogo" color="primary" />
+              </div>
+              <div class="flex items-center justify-between py-3">
+                <span class="text-sm text-gray-700">Show Social Media Links</span>
+                <UToggle v-model="receipts.showSocial" color="primary" />
+              </div>
+            </div>
+            <!-- Receipt Preview -->
+            <div class="border border-gray-200 rounded-xl p-6 bg-gray-50">
+              <div class="bg-white rounded-lg p-4 shadow-sm text-center font-mono text-xs space-y-2">
+                <div class="w-10 h-10 bg-gray-200 rounded-full mx-auto"></div>
+                <p class="font-bold text-sm">MAIN STREET CAFE</p>
+                <p class="text-gray-500">Lot 1.23, Main Street Mall</p>
+                <div class="border-t border-dashed border-gray-300 my-2"></div>
+                <div class="flex justify-between"><span>Latte</span><span>12.00</span></div>
+                <div class="flex justify-between"><span>Croissant</span><span>8.50</span></div>
+                <div class="border-t border-dashed border-gray-300 my-2"></div>
+                <div class="flex justify-between font-bold"><span>TOTAL</span><span>20.50</span></div>
+                <p class="text-gray-500 mt-2">{{ receipts.footer }}</p>
+              </div>
+              <p class="text-center text-xs text-gray-400 mt-3">Live Preview</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Security & Roles -->
+        <div v-show="activeTab === 'security'" class="space-y-8 max-w-3xl">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">Security & Roles</h3>
+            <p class="text-sm text-gray-500 mt-1">Manage access permissions for different employee roles.</p>
+          </div>
+
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-200">
+                <th class="text-left py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                <th class="text-center py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">POS Access</th>
+                <th class="text-center py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Refunds</th>
+                <th class="text-center py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Reports</th>
+                <th class="text-center py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Settings</th>
+                <th class="text-right py-3"></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr v-for="role in roles" :key="role.name">
+                <td class="py-4 font-medium text-gray-900">{{ role.name }}</td>
+                <td class="py-4 text-center">
+                  <UIcon :name="role.pos ? 'i-lucide-check-circle' : 'i-lucide-x-circle'" :class="role.pos ? 'text-green-500' : 'text-gray-300'" class="w-5 h-5" />
+                </td>
+                <td class="py-4 text-center">
+                  <UIcon :name="role.refunds ? 'i-lucide-check-circle' : 'i-lucide-x-circle'" :class="role.refunds ? 'text-green-500' : 'text-gray-300'" class="w-5 h-5" />
+                </td>
+                <td class="py-4 text-center">
+                  <UIcon :name="role.reports ? 'i-lucide-check-circle' : 'i-lucide-x-circle'" :class="role.reports ? 'text-green-500' : 'text-gray-300'" class="w-5 h-5" />
+                </td>
+                <td class="py-4 text-center">
+                  <UIcon :name="role.settings ? 'i-lucide-check-circle' : 'i-lucide-x-circle'" :class="role.settings ? 'text-green-500' : 'text-gray-300'" class="w-5 h-5" />
+                </td>
+                <td class="py-4 text-right">
+                  <button class="text-sm text-primary hover:underline">Edit</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Integrations -->
+        <div v-show="activeTab === 'integrations'" class="space-y-8 max-w-3xl">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">Hardware & Integrations</h3>
+            <p class="text-sm text-gray-500 mt-1">Connect your printers, payment terminals, and delivery platforms.</p>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4">
+            <div v-for="hw in integrations" :key="hw.name" class="border border-gray-200 rounded-xl p-5 text-center">
+              <div class="flex justify-between items-start mb-3">
+                <UIcon :name="hw.icon" class="w-8 h-8 text-gray-400" />
+                <span class="text-xs font-semibold" :class="hw.statusColor">{{ hw.status }}</span>
+              </div>
+              <p class="font-semibold text-gray-900 mt-2">{{ hw.name }}</p>
+              <p class="text-xs text-gray-500 mt-1">{{ hw.desc }}</p>
+              <button
+                :class="[
+                  'mt-4 w-full py-2 text-sm font-medium rounded-lg border transition-colors',
+                  hw.status === 'Connected'
+                    ? 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    : 'border-red-200 text-red-600 bg-red-50 hover:bg-red-100'
+                ]"
+              >
+                {{ hw.action }}
+              </button>
             </div>
           </div>
         </div>

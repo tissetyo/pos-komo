@@ -9,68 +9,46 @@ const handleLogout = async () => {
 </script>
 
 <template>
-  <div class="h-screen w-screen bg-gray-100 dark:bg-gray-950 flex overflow-hidden font-sans">
-    <!-- Left Sidebar / Navigation (Icon only) -->
-    <aside class="w-16 md:w-20 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col items-center py-4 shrink-0 shadow-sm z-10">
-      <div class="bg-primary/10 dark:bg-primary/20 p-2 rounded-xl mb-6 text-primary cursor-pointer hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors" title="Reload Dashboard" @click="navigateTo('/cashier')">
-        <UIcon name="i-lucide-box" class="w-6 h-6 md:w-8 md:h-8" />
-      </div>
-
-      <nav class="flex-1 flex flex-col gap-4 w-full px-2">
-        <UButton
-          to="/cashier"
-          icon="i-lucide-layout-grid"
-          color="neutral"
-          variant="ghost"
-          class="w-full h-12 justify-center rounded-xl"
-          title="Cashier Dashboard"
-        />
-        <UButton
-          icon="i-lucide-list-ordered"
-          color="neutral"
-          variant="ghost"
-          class="w-full h-12 justify-center rounded-xl"
-          title="Active Orders"
-        />
-        <UButton
-          icon="i-lucide-clock"
-          color="neutral"
-          variant="ghost"
-          class="w-full h-12 justify-center rounded-xl"
-          title="Shift History"
-        />
-      </nav>
-
-      <div class="mt-auto px-2 w-full flex flex-col gap-4">
-        <UButton
-          icon="i-lucide-wifi"
-          color="green"
-          variant="ghost"
-          class="w-full h-12 justify-center rounded-xl"
-          title="Online"
-        />
-        <UButton
-          to="/backoffice"
-          icon="i-lucide-settings"
-          color="neutral"
-          variant="ghost"
-          class="w-full h-12 justify-center rounded-xl hover:text-primary transition-colors"
-          title="Backoffice Settings"
-        />
-        <ThemeToggle class="mx-auto" />
-        <div class="relative group mx-auto cursor-pointer" @click="handleLogout" title="Click to Logout">
-           <UAvatar :alt="user?.email || 'Cashier'" size="sm" class="group-hover:opacity-75 transition-opacity" />
-           <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded-full">
-             <UIcon name="i-lucide-log-out" class="text-white w-4 h-4" />
-           </div>
+  <div class="h-screen w-screen bg-gray-100 flex flex-col overflow-hidden font-sans">
+    <!-- Top Navigation Bar -->
+    <header class="h-14 bg-[#1E293B] flex items-center justify-between px-4 shrink-0 z-20">
+      <!-- Left: Logo + Search -->
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 cursor-pointer" @click="navigateTo('/cashier')">
+          <UIcon name="i-lucide-box" class="w-6 h-6 text-white" />
+          <span class="font-bold text-white text-lg">May POS</span>
+        </div>
+        <div class="relative ml-4">
+          <UIcon name="i-lucide-search" class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search menu..."
+            class="bg-white/10 text-white placeholder-gray-400 rounded-lg pl-10 pr-4 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-white/30 border border-white/10"
+          />
         </div>
       </div>
-    </aside>
+
+      <!-- Right: Table selector + User + Icons -->
+      <div class="flex items-center gap-3">
+        <button class="bg-emerald-500 text-white px-4 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2 hover:bg-emerald-600 transition-colors">
+          <UIcon name="i-lucide-utensils-crossed" class="w-4 h-4" />
+          Table #4 <UIcon name="i-lucide-chevron-down" class="w-3 h-3" />
+        </button>
+
+        <div class="flex items-center gap-2 ml-2">
+          <span class="text-white text-sm font-medium">{{ user?.email?.split('@')[0] || 'Alex M.' }}</span>
+          <UAvatar :alt="user?.email || 'Cashier'" size="sm" class="ring-2 ring-white/20" />
+        </div>
+        <UButton icon="i-lucide-bell" color="neutral" variant="ghost" class="text-white hover:bg-white/10" />
+        <NuxtLink to="/backoffice">
+          <UButton icon="i-lucide-settings" color="neutral" variant="ghost" class="text-white hover:bg-white/10" />
+        </NuxtLink>
+      </div>
+    </header>
 
     <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col min-w-0 bg-gray-50/50 dark:bg-gray-900/50">
+    <main class="flex-1 flex min-w-0 overflow-hidden">
       <slot />
     </main>
-
   </div>
 </template>

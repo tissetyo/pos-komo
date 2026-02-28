@@ -1,23 +1,18 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'backoffice' })
 
-const client = useSupabaseClient()
-const user = useSupabaseUser()
+const { client, outletId, profileReady } = useUserProfile()
 const products = ref<any[]>([])
 const categories = ref<any[]>([])
 const loading = ref(true)
 const search = ref('')
 const selectedCategoryFilter = ref('All Categories')
-const outletId = ref<string | null>(null)
 const currentPage = ref(1)
 const perPage = 10
 
 const fetchProducts = async () => {
   loading.value = true
   try {
-    if (!user.value) return
-    const { data: profile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
-    outletId.value = profile?.outlet_id || null
     if (!outletId.value) return
 
     const { data } = await client
@@ -53,7 +48,7 @@ const fetchProducts = async () => {
   }
 }
 
-onMounted(fetchProducts)
+watch(profileReady, (ready) => { if (ready) fetchProducts() })
 
 const filteredProducts = computed(() => {
   return products.value.filter(p => {

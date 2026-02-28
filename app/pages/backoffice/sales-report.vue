@@ -1,10 +1,8 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'backoffice' })
 
-const client = useSupabaseClient()
-const user = useSupabaseUser()
+const { client, outletId, profileReady } = useUserProfile()
 const loading = ref(true)
-const outletId = ref<string | null>(null)
 
 // Real data
 const totalRevenue = ref(0)
@@ -25,12 +23,9 @@ const paymentColors = ['bg-[#1E293B]', 'bg-blue-500', 'bg-green-500', 'bg-purple
 
 const formatRM = (amount: number) => 'RM ' + amount.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-onMounted(async () => {
-  if (!user.value) { loading.value = false; return }
+const loadSalesData = async () => {
+  if (!outletId.value) { loading.value = false; return }
   try {
-    const { data: profile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
-    outletId.value = profile?.outlet_id || null
-    if (!outletId.value) return
 
     // 1. Get all paid orders
     const { data: orders } = await client
@@ -120,7 +115,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+watch(profileReady, (ready) => { if (ready) loadSalesData() })
 
 const sortedProducts = computed(() => {
   if (productTab.value === 'Top Selling') {

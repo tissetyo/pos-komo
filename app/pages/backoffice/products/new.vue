@@ -1,8 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'backoffice' })
 
-const client = useSupabaseClient()
-const user = useSupabaseUser()
+const { client, outletId, profileReady, loadProfile: reloadProfile } = useUserProfile()
 const saving = ref(false)
 
 const form = ref({
@@ -16,7 +15,14 @@ const form = ref({
 })
 
 const categories = ref<any[]>([])
-const outletId = ref<string | null>(null)
+
+// Load categories when profile is ready
+watch(profileReady, async (ready) => {
+  if (ready && outletId.value) {
+    const { data: cats } = await client.from('categories').select('id, name').eq('outlet_id', outletId.value)
+    categories.value = cats || []
+  }
+})
 
 // Image upload
 const imageFile = ref<File | null>(null)
@@ -54,30 +60,13 @@ const removeOption = (varIndex: number, optIndex: number) => {
   variations.value[varIndex].options.splice(optIndex, 1)
 }
 
-const loadProfile = async () => {
-  if (!user.value?.id) return
-  const { data: profile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
-  outletId.value = profile?.outlet_id || null
-  if (!outletId.value) return
-
-  const { data: cats } = await client.from('categories').select('id, name').eq('outlet_id', outletId.value)
-  categories.value = cats || []
-}
-
-onMounted(loadProfile)
-
-// Retry if user wasn't ready at mount
-watch(user, (val) => {
-  if (val?.id && !outletId.value) loadProfile()
-}, { immediate: false })
-
 const saveProduct = async () => {
   if (!form.value.name) { alert('Please enter a product name'); return }
   if (!form.value.price) { alert('Please enter a price'); return }
 
-  // Retry getting outletId if it's not set
-  if (!outletId.value && user.value?.id) {
-    await loadProfile()
+  // Ensure outlet is loaded
+  if (!outletId.value) {
+    await reloadProfile()
   }
   if (!outletId.value) { alert('Could not determine your store. Please reload the page and try again.'); return }
   saving.value = true

@@ -1,12 +1,10 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'backoffice' })
 
-const client = useSupabaseClient()
-const user = useSupabaseUser()
+const { client, outletId, userId, profileReady } = useUserProfile()
 const employees = ref<any[]>([])
 const loading = ref(true)
 const search = ref('')
-const outletId = ref<string | null>(null)
 
 const isAddOpen = ref(false)
 const newEmployee = ref({ name: '', email: '', password: '', role: 'cashier' })
@@ -19,9 +17,6 @@ const employeeSales = ref<Record<string, number>>({})
 const fetchEmployees = async () => {
   loading.value = true
   try {
-    if (!user.value) return
-    const { data: myProfile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
-    outletId.value = myProfile?.outlet_id || null
     if (!outletId.value) return
 
     const { data } = await client
@@ -60,7 +55,7 @@ const fetchEmployees = async () => {
   }
 }
 
-onMounted(fetchEmployees)
+watch(profileReady, (ready) => { if (ready) fetchEmployees() })
 
 const filteredEmployees = computed(() => {
   if (!search.value) return employees.value
@@ -75,7 +70,7 @@ const topPerformer = computed(() => {
 })
 
 const saveEmployee = async () => {
-  if (!newEmployee.value.email || !newEmployee.value.password || !user.value || !outletId.value) return
+  if (!newEmployee.value.email || !newEmployee.value.password || !userId || !outletId.value) return
   saving.value = true
   try {
     const { data: authData, error } = await client.auth.signUp({

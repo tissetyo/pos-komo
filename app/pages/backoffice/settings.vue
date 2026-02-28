@@ -1,8 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'backoffice' })
 
-const client = useSupabaseClient()
-const user = useSupabaseUser()
+const { client, outletId, userId, profileReady } = useUserProfile()
 const loading = ref(true)
 const saving = ref(false)
 const saveSuccess = ref(false)
@@ -25,7 +24,6 @@ const storeInfo = ref({
   email: '',
   store_type: '',
 })
-const outletId = ref<string | null>(null)
 
 // Operations
 const operations = ref({
@@ -61,13 +59,9 @@ const integrations = ref([
 const currencyOptions = ['IDR', 'MYR', 'SGD', 'USD', 'PHP', 'THB']
 const timezoneOptions = ['Asia/Jakarta', 'Asia/Kuala_Lumpur', 'Asia/Singapore', 'Asia/Bangkok', 'Asia/Manila']
 
-onMounted(async () => {
-  if (!user.value) return
+const loadSettings = async () => {
+  if (!outletId.value) return
   try {
-    const { data: profile } = await client.from('profiles').select('outlet_id, email').eq('id', user.value.id).single()
-    outletId.value = profile?.outlet_id || null
-    storeInfo.value.email = profile?.email || ''
-    if (!outletId.value) return
 
     const { data: outlet } = await client.from('outlets').select('*').eq('id', outletId.value).single()
     if (outlet) {
@@ -82,7 +76,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+watch(profileReady, (ready) => { if (ready) loadSettings() })
 
 const saveSettings = async () => {
   if (!outletId.value) return

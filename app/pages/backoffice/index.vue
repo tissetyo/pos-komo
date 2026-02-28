@@ -1,11 +1,9 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'backoffice' })
 
-const client = useSupabaseClient()
-const user = useSupabaseUser()
+const { client, outletId, profileReady } = useUserProfile()
 const dateRange = ref<'Today' | 'This Week' | 'This Month'>('Today')
 const loading = ref(true)
-const outletId = ref<string | null>(null)
 
 // Real data refs
 const totalSales = ref(0)
@@ -33,13 +31,10 @@ const getDateRange = (range: string) => {
 }
 
 const fetchDashboardData = async () => {
-  if (!user.value) { loading.value = false; return }
+  if (!outletId.value) { loading.value = false; return }
   loading.value = true
 
   try {
-    const { data: profile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
-    outletId.value = profile?.outlet_id || null
-    if (!outletId.value) { loading.value = false; return }
 
     const startDate = getDateRange(dateRange.value)
 
@@ -115,7 +110,7 @@ const fetchDashboardData = async () => {
 }
 
 watch(dateRange, () => fetchDashboardData())
-onMounted(fetchDashboardData)
+watch(profileReady, (ready) => { if (ready) fetchDashboardData() })
 
 const formatRM = (amount: number) => 'RM ' + (amount / 100 || amount).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 

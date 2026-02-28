@@ -1,13 +1,11 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'backoffice' })
 
-const client = useSupabaseClient()
-const user = useSupabaseUser()
+const { client, outletId, profileReady } = useUserProfile()
 const transactions = ref<any[]>([])
 const loading = ref(true)
 const search = ref('')
 const activeTab = ref('All Transactions')
-const outletId = ref<string | null>(null)
 
 const tabs = ['All Transactions', 'Online Orders', 'Offline Orders', 'Void/Refunds']
 
@@ -26,9 +24,6 @@ const today = computed(() => {
 const fetchTransactions = async () => {
   loading.value = true
   try {
-    if (!user.value) return
-    const { data: profile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
-    outletId.value = profile?.outlet_id || null
     if (!outletId.value) return
 
     const { data } = await client
@@ -63,7 +58,7 @@ const fetchTransactions = async () => {
   }
 }
 
-onMounted(fetchTransactions)
+watch(profileReady, (ready) => { if (ready) fetchTransactions() })
 
 const filteredTx = computed(() => {
   let filtered = transactions.value

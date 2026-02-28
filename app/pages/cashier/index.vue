@@ -1,8 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'cashier' })
 
-const client = useSupabaseClient()
-const user = useSupabaseUser()
+const { client, outletId, userId, profileReady } = useUserProfile()
 
 // Data from Supabase
 const products = ref<any[]>([])
@@ -10,7 +9,6 @@ const categories = ref<string[]>(['All Items'])
 const activeCategory = ref('All Items')
 const searchQuery = ref('')
 const loading = ref(true)
-const outletId = ref<string | null>(null)
 
 // Category icons
 const categoryIcons: Record<string, string> = {
@@ -51,12 +49,9 @@ const formatCurrency = (amount: number) => {
 }
 
 // Load products from Supabase
-onMounted(async () => {
-  if (!user.value) return
+const loadProducts = async () => {
+  if (!outletId.value) { loading.value = false; return }
   try {
-    const { data: profile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
-    outletId.value = profile?.outlet_id || null
-    if (!outletId.value) { loading.value = false; return }
 
     const { data } = await client
       .from('products')
@@ -97,7 +92,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+watch(profileReady, (ready) => { if (ready) loadProducts() })
 
 const filteredProducts = computed(() => {
   return products.value.filter(p => {
@@ -193,7 +190,7 @@ const openPayment = () => {
 }
 
 const processPayment = async () => {
-  if (!user.value || !outletId.value || !canPay.value) return
+  if (!userId.value || !outletId.value || !canPay.value) return
   isProcessing.value = true
 
   try {
@@ -204,7 +201,7 @@ const processPayment = async () => {
       .insert({
         receipt_number: receiptNumber,
         outlet_id: outletId.value,
-        cashier_id: user.value.id,
+        cashier_id: userId.value,
         subtotal: subtotal.value,
         tax: tax.value,
         discount: 0,

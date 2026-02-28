@@ -2,6 +2,7 @@
 definePageMeta({ layout: 'cashier' })
 
 const { client, outletId, userId, profileReady } = useUserProfile()
+const { formatPrice, symbol: currSymbol, loadCurrency } = useCurrency()
 
 // Data from Supabase
 const products = ref<any[]>([])
@@ -33,9 +34,10 @@ const showNoteModal = ref(false)
 const showVariationPicker = ref(false)
 const pickingProduct = ref<any>(null)
 const selectedVariations = ref<Record<string, any>>({})
+const pickerQty = ref(1)
 
-// Payment Flow
-const showPaymentModal = ref(false)
+// Payment/Checkout Flow
+const showCheckout = ref(false)
 const paymentMethod = ref<'cash' | 'qris' | 'debit' | 'credit'>('cash')
 const cashReceived = ref('')
 const isProcessing = ref(false)
@@ -44,14 +46,11 @@ const isProcessing = ref(false)
 const showSuccessModal = ref(false)
 const completedOrder = ref<any>(null)
 
-const formatCurrency = (amount: number) => {
-  return amount.toLocaleString('en-MY', { minimumFractionDigits: 0 })
-}
-
 // Load products from Supabase
 const loadProducts = async () => {
   if (!outletId.value) { loading.value = false; return }
   try {
+    await loadCurrency(outletId.value)
 
     const { data } = await client
       .from('products')
@@ -106,24 +105,24 @@ const filteredProducts = computed(() => {
 
 const subtotal = computed(() => orderItems.value.reduce((acc, item) => acc + (item.finalPrice * item.quantity), 0))
 const tax = computed(() => Math.round(subtotal.value * 0.10))
-const total = computed(() => subtotal.value + tax.value)
+const discount = computed(() => 0)
+const total = computed(() => subtotal.value + tax.value - discount.value)
 const change = computed(() => {
-  const cash = parseInt(cashReceived.value) || 0
+  const cash = parseFloat(cashReceived.value) || 0
   return Math.max(0, cash - total.value)
 })
 const canPay = computed(() => {
   if (paymentMethod.value === 'cash') {
-    return (parseInt(cashReceived.value) || 0) >= total.value
+    return (parseFloat(cashReceived.value) || 0) >= total.value
   }
   return true
 })
 
 const handleProductClick = (product: any) => {
   if (product.variations && product.variations.length > 0) {
-    // Show variation picker
     pickingProduct.value = product
     selectedVariations.value = {}
-    // Default select first option for each variation group
+    pickerQty.value = 1
     product.variations.forEach((v: any) => {
       const options = v.options || []
       if (options.length > 0) {
@@ -136,20 +135,26 @@ const handleProductClick = (product: any) => {
   }
 }
 
-const addToOrder = (product: any, priceAdj: number, variationSnapshot: any) => {
+const pickerTotal = computed(() => {
+  if (!pickingProduct.value) return 0
+  const adj = Object.values(selectedVariations.value).reduce((s: number, o: any) => s + (o.price_adj || 0), 0)
+  return (pickingProduct.value.price + adj) * pickerQty.value
+})
+
+const addToOrder = (product: any, priceAdj: number, variationSnapshot: any, qty = 1) => {
   const finalPrice = product.price + priceAdj
   const varKey = JSON.stringify(variationSnapshot)
   const existing = orderItems.value.find(item => item.id === product.id && JSON.stringify(item.variationSnapshot) === varKey)
 
   if (existing) {
-    existing.quantity++
+    existing.quantity += qty
   } else {
     orderItems.value.push({
       id: product.id,
       name: product.name,
       price: product.price,
       finalPrice,
-      quantity: 1,
+      quantity: qty,
       image: product.image,
       variationSnapshot,
       variationLabel: Object.entries(variationSnapshot).map(([k, v]: any) => v.name).join(', ')
@@ -160,7 +165,7 @@ const addToOrder = (product: any, priceAdj: number, variationSnapshot: any) => {
 const confirmVariation = () => {
   if (!pickingProduct.value) return
   const priceAdj = Object.values(selectedVariations.value).reduce((sum: number, opt: any) => sum + (opt.price_adj || 0), 0)
-  addToOrder(pickingProduct.value, priceAdj, selectedVariations.value)
+  addToOrder(pickingProduct.value, priceAdj, selectedVariations.value, pickerQty.value)
   showVariationPicker.value = false
   pickingProduct.value = null
 }
@@ -182,12 +187,32 @@ const clearOrder = () => {
   orderNote.value = ''
 }
 
-const openPayment = () => {
+const openCheckout = () => {
   if (orderItems.value.length === 0) return
   paymentMethod.value = 'cash'
   cashReceived.value = ''
-  showPaymentModal.value = true
+  showCheckout.value = true
 }
+
+// Numpad
+const handleNumpad = (key: string) => {
+  if (key === 'backspace') {
+    cashReceived.value = cashReceived.value.slice(0, -1)
+  } else if (key === '.') {
+    if (!cashReceived.value.includes('.')) cashReceived.value += '.'
+  } else {
+    cashReceived.value += key
+  }
+}
+
+const quickAmounts = computed(() => {
+  const t = total.value
+  return [
+    { label: `${currSymbol.value}10`, value: 10 },
+    { label: `${currSymbol.value}20`, value: 20 },
+    { label: `${currSymbol.value}50`, value: 50 },
+  ]
+})
 
 const processPayment = async () => {
   if (!userId.value || !outletId.value || !canPay.value) return
@@ -217,7 +242,7 @@ const processPayment = async () => {
     if (orderErr) throw orderErr
 
     const items = orderItems.value.map(item => ({
-      order_id: order.id,
+      order_id: (order as any).id,
       product_id: item.id,
       quantity: item.quantity,
       unit_price: item.finalPrice,
@@ -226,10 +251,9 @@ const processPayment = async () => {
       notes: orderNote.value || null
     }))
 
-    const { error: itemsErr } = await client.from('order_items').insert(items)
+    const { error: itemsErr } = await client.from('order_items').insert(items as any)
     if (itemsErr) throw itemsErr
 
-    // Show success
     completedOrder.value = {
       receiptNumber,
       total: total.value,
@@ -239,7 +263,7 @@ const processPayment = async () => {
       orderType: orderType.value
     }
 
-    showPaymentModal.value = false
+    showCheckout.value = false
     showSuccessModal.value = true
 
   } catch (err: any) {
@@ -262,264 +286,396 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
 
 <template>
   <div class="flex h-full w-full">
-    <!-- Left Sidebar: Categories -->
-    <aside class="w-44 bg-white border-r border-gray-200 flex flex-col shrink-0">
-      <div class="px-4 py-4">
-        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Categories</p>
-      </div>
-      <nav class="flex-1 px-2 space-y-1 overflow-y-auto">
-        <button
-          v-for="cat in categories"
-          :key="cat"
-          @click="activeCategory = cat"
-          :class="[
-            'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left',
-            activeCategory === cat
-              ? 'bg-[#1E293B] text-white shadow-md'
-              : 'text-gray-600 hover:bg-gray-100'
-          ]"
-        >
-          <UIcon :name="categoryIcons[cat] || 'i-lucide-tag'" class="w-5 h-5 flex-shrink-0" />
-          {{ cat }}
-        </button>
-      </nav>
 
-      <!-- Order Type Selector -->
-      <div class="p-3 border-t border-gray-100">
-        <p class="text-[10px] font-semibold text-gray-400 uppercase mb-2">Order Type</p>
-        <div class="flex gap-1">
-          <button
-            v-for="type in (['dine-in', 'takeaway', 'delivery'] as const)"
-            :key="type"
-            @click="orderType = type"
-            :class="[
-              'flex-1 py-2 text-xs font-semibold rounded-lg transition-colors text-center',
-              orderType === type ? 'bg-[#1E293B] text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-            ]"
-          >
-            {{ (orderTypeLabels as any)[type] }}
+    <!-- CHECKOUT VIEW -->
+    <div v-if="showCheckout" class="flex h-full w-full">
+      <!-- Left: Order Summary -->
+      <div class="w-[380px] bg-white border-r border-gray-200 flex flex-col shrink-0">
+        <div class="px-5 py-4 border-b border-gray-200 flex items-center gap-3">
+          <button @click="showCheckout = false" class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
+            <UIcon name="i-lucide-arrow-left" class="w-4 h-4 text-gray-600" />
           </button>
-        </div>
-      </div>
-    </aside>
-
-    <!-- Center: Product Grid -->
-    <div class="flex-1 flex flex-col p-5 overflow-hidden bg-gray-50/50">
-      <!-- Title + Badge -->
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <h2 class="text-xl font-bold text-gray-900">Choose Order</h2>
-          <p class="text-sm text-gray-500">{{ (orderTypeNames as any)[orderType] }} • Select items to add</p>
-        </div>
-        <span class="bg-emerald-50 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-emerald-200">
-          {{ filteredProducts.length }} items
-        </span>
-      </div>
-
-      <!-- Loading -->
-      <div v-if="loading" class="flex-1 flex items-center justify-center">
-        <div class="text-center text-gray-400">
-          <UIcon name="i-lucide-loader-2" class="w-8 h-8 animate-spin mx-auto mb-2" />
-          <p>Loading products...</p>
-        </div>
-      </div>
-
-      <!-- Empty -->
-      <div v-else-if="filteredProducts.length === 0" class="flex-1 flex items-center justify-center">
-        <div class="text-center text-gray-400">
-          <UIcon name="i-lucide-package" class="w-12 h-12 mx-auto mb-3 opacity-40" />
-          <p class="text-lg font-medium mb-1">No products found</p>
-          <p class="text-sm mb-4">Add products from the backoffice to start selling.</p>
-          <UButton to="/backoffice/products" color="primary" variant="soft" label="Go to Products" icon="i-lucide-arrow-right" />
-        </div>
-      </div>
-
-      <!-- Product Grid -->
-      <div v-else class="flex-1 overflow-y-auto pr-1 custom-scrollbar">
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <div
-            v-for="product in filteredProducts"
-            :key="product.id"
-            class="bg-[#1E293B] rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1 group flex flex-col"
-            @click="handleProductClick(product)"
-          >
-            <!-- Product Image -->
-            <div class="aspect-[4/3] w-full relative overflow-hidden">
-              <img v-if="product.image" :src="product.image" :alt="product.name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-              <div v-else class="w-full h-full flex items-center justify-center bg-[#2d3a4f]">
-                <UIcon name="i-lucide-coffee" class="w-12 h-12 text-gray-500" />
-              </div>
-              <!-- Price Badge -->
-              <span class="absolute top-3 left-3 bg-emerald-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md">
-                {{ formatCurrency(product.price) }}
-              </span>
-              <!-- Variation badge -->
-              <span v-if="product.variations.length > 0" class="absolute top-3 right-3 bg-purple-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
-                {{ product.variations.length }} options
-              </span>
-            </div>
-            <!-- Product Info -->
-            <div class="p-3">
-              <h3 class="font-semibold text-white text-sm leading-tight line-clamp-1">{{ product.name }}</h3>
-              <p class="text-gray-400 text-xs mt-1 line-clamp-1">{{ product.description || product.category }}</p>
-            </div>
+          <div>
+            <h2 class="font-bold text-lg text-gray-900">Order #{{ Date.now().toString().slice(-4) }}</h2>
+            <p class="text-xs text-gray-500">{{ new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' }) }}</p>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Right Sidebar: Order Summary -->
-    <div class="w-80 lg:w-96 bg-white border-l border-gray-200 flex flex-col shrink-0">
-      <!-- Order Header -->
-      <div class="px-5 py-4 border-b border-gray-100">
-        <div class="flex items-center justify-between">
-          <h2 class="font-bold text-lg text-gray-900">Current Order</h2>
-          <span class="bg-[#1E293B] text-white text-xs font-bold w-8 h-8 rounded-lg flex items-center justify-center">
-            {{ (orderTypeLabels as any)[orderType] }}
+          <span class="ml-auto bg-[#162456] text-white text-xs font-bold px-3 py-1 rounded-lg uppercase">
+            {{ (orderTypeNames as any)[orderType] }}
           </span>
         </div>
-        <p class="text-xs text-gray-500 mt-1">{{ (orderTypeNames as any)[orderType] }} • {{ orderItems.length }} item{{ orderItems.length !== 1 ? 's' : '' }}</p>
-      </div>
 
-      <!-- Order Items List -->
-      <div class="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar space-y-3">
-        <div v-if="orderItems.length === 0" class="flex flex-col items-center justify-center h-full text-center text-gray-400 space-y-4">
-          <UIcon name="i-lucide-shopping-cart" class="w-12 h-12 text-gray-200" />
-          <div>
-            <p class="text-sm font-medium">Order is empty</p>
-            <p class="text-xs mt-1">Select items from the menu to get started.</p>
-          </div>
-        </div>
-
-        <div v-for="item in orderItems" :key="item.id + JSON.stringify(item.variationSnapshot)" class="flex items-center gap-3">
-          <!-- Thumbnail -->
-          <div class="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-            <img v-if="item.image" :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
-            <div v-else class="w-full h-full flex items-center justify-center">
-              <UIcon name="i-lucide-coffee" class="w-5 h-5 text-gray-400" />
+        <!-- Items -->
+        <div class="flex-1 overflow-y-auto px-5 py-4 space-y-4 custom-scrollbar">
+          <div v-for="item in orderItems" :key="item.id + JSON.stringify(item.variationSnapshot)" class="flex items-start gap-3">
+            <div class="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+              <img v-if="item.image" :src="item.image" class="w-full h-full object-cover" />
+              <div v-else class="w-full h-full flex items-center justify-center">
+                <UIcon name="i-lucide-coffee" class="w-5 h-5 text-gray-400" />
+              </div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex justify-between items-start">
+                <h4 class="font-semibold text-sm text-gray-900">{{ item.name }}<span v-if="item.variationLabel" class="text-xs text-gray-500"> ({{ item.variationLabel }})</span></h4>
+                <span class="font-semibold text-sm text-gray-900 ml-2 whitespace-nowrap">{{ formatPrice(item.finalPrice) }}</span>
+              </div>
+              <p v-if="item.variationLabel" class="text-[10px] text-gray-400">• {{ item.variationLabel }}</p>
+              <span class="inline-flex items-center bg-gray-100 rounded-md px-2 py-0.5 text-xs font-semibold text-gray-600 mt-1">×{{ item.quantity }}</span>
             </div>
           </div>
-          <!-- Details -->
-          <div class="flex-1 min-w-0">
-            <h4 class="font-semibold text-sm text-gray-900 truncate">{{ item.name }}</h4>
-            <p v-if="item.variationLabel" class="text-[10px] text-purple-600 font-medium">{{ item.variationLabel }}</p>
-            <p class="text-xs text-gray-500">{{ formatCurrency(item.finalPrice) }}</p>
-          </div>
-          <!-- Qty Controls -->
-          <div class="flex items-center gap-1 bg-gray-50 rounded-lg border border-gray-200 px-1 py-0.5">
-            <button class="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-200 rounded transition-colors" @click.stop="updateQuantity(item, -1)">
-              <UIcon name="i-lucide-minus" class="w-3.5 h-3.5" />
-            </button>
-            <span class="w-6 text-center text-sm font-semibold text-gray-900">{{ item.quantity }}</span>
-            <button class="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-200 rounded transition-colors" @click.stop="updateQuantity(item, 1)">
-              <UIcon name="i-lucide-plus" class="w-3.5 h-3.5" />
-            </button>
-          </div>
         </div>
-      </div>
 
-      <!-- Totals & Actions -->
-      <div class="border-t border-gray-200 p-5">
-        <div class="space-y-2 mb-4">
-          <div class="flex justify-between text-sm">
-            <span class="text-gray-500">Subtotal</span>
-            <span class="font-medium text-gray-900">{{ formatCurrency(subtotal) }}</span>
-          </div>
-          <div class="flex justify-between text-sm">
-            <span class="text-gray-500">Tax (10%)</span>
-            <span class="font-medium text-gray-900">{{ formatCurrency(tax) }}</span>
-          </div>
-          <div class="border-t border-dashed border-gray-200 my-2 pt-2">
+        <!-- Totals -->
+        <div class="border-t border-gray-200 px-5 py-4 space-y-2">
+          <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span class="text-gray-900">{{ formatPrice(subtotal) }}</span></div>
+          <div class="flex justify-between text-sm"><span class="text-gray-500">Tax (10%)</span><span class="text-gray-900">{{ formatPrice(tax) }}</span></div>
+          <div class="flex justify-between text-sm"><span class="text-gray-500">Discount</span><span class="text-gray-900">-{{ formatPrice(discount) }}</span></div>
+          <div class="border-t border-dashed border-gray-200 pt-3 mt-2">
             <div class="flex justify-between items-center">
-              <span class="font-semibold text-gray-900">Total</span>
-              <span class="font-bold text-2xl text-gray-900">{{ formatCurrency(total) }}</span>
+              <span class="font-bold text-gray-900">Total Amount</span>
+              <span class="text-2xl font-bold text-gray-900">{{ formatPrice(total) }}</span>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Note indicator -->
-        <div v-if="orderNote" class="mb-3 bg-yellow-50 rounded-lg px-3 py-2 flex items-center gap-2">
-          <UIcon name="i-lucide-sticky-note" class="w-4 h-4 text-yellow-600" />
-          <p class="text-xs text-yellow-700 truncate flex-1">{{ orderNote }}</p>
+      <!-- Center: Payment Methods + Numpad -->
+      <div class="flex-1 bg-gray-50 flex flex-col p-8">
+        <!-- Payment Methods -->
+        <div class="mb-6">
+          <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Payment Method</h3>
+          <div class="grid grid-cols-4 gap-3">
+            <button v-for="pm in ([
+              { id: 'cash', icon: 'i-lucide-banknote', label: 'Cash' },
+              { id: 'credit', icon: 'i-lucide-credit-card', label: 'Credit' },
+              { id: 'debit', icon: 'i-lucide-smartphone', label: 'Debit' },
+              { id: 'qris', icon: 'i-lucide-qr-code', label: 'Scan' }
+            ] as const)"
+              :key="pm.id"
+              @click="paymentMethod = pm.id as any"
+              :class="[
+                'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all',
+                paymentMethod === pm.id
+                  ? 'border-[#162456] bg-[#162456] text-white shadow-md'
+                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+              ]"
+            >
+              <UIcon :name="pm.icon" class="w-6 h-6" />
+              <span class="text-xs font-semibold">{{ pm.label }}</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Action Buttons -->
-        <div class="flex gap-3 mb-3">
-          <button
-            class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors disabled:opacity-40"
-            :disabled="orderItems.length === 0"
-            @click="clearOrder"
-          >
-            <UIcon name="i-lucide-trash-2" class="w-4 h-4" />
-            Clear
-          </button>
-          <button
-            class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors"
-            @click="showNoteModal = true"
-          >
-            <UIcon name="i-lucide-file-text" class="w-4 h-4" />
-            Note
-          </button>
+        <!-- Cash Entry with Numpad -->
+        <div v-if="paymentMethod === 'cash'" class="flex-1 flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Cash Entry</h3>
+            <div class="flex gap-2">
+              <button v-for="qa in quickAmounts" :key="qa.value" @click="cashReceived = qa.value.toString()"
+                class="px-4 py-1.5 text-xs font-semibold bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                {{ qa.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Numpad Grid -->
+          <div class="grid grid-cols-3 gap-3 max-w-sm">
+            <button v-for="key in ['1','2','3','4','5','6','7','8','9']" :key="key"
+              @click="handleNumpad(key)"
+              class="h-16 rounded-xl bg-white border border-gray-200 text-xl font-semibold text-gray-800 hover:bg-gray-50 active:bg-gray-100 transition-colors shadow-sm">
+              {{ key }}
+            </button>
+            <button @click="handleNumpad('backspace')"
+              class="h-16 rounded-xl bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 active:bg-gray-100 transition-colors shadow-sm">
+              <UIcon name="i-lucide-delete" class="w-6 h-6 text-gray-600" />
+            </button>
+            <button @click="handleNumpad('0')"
+              class="h-16 rounded-xl bg-white border border-gray-200 text-xl font-semibold text-gray-800 hover:bg-gray-50 active:bg-gray-100 transition-colors shadow-sm">0</button>
+            <button @click="handleNumpad('.')"
+              class="h-16 rounded-xl bg-white border border-gray-200 text-xl font-semibold text-gray-800 hover:bg-gray-50 active:bg-gray-100 transition-colors shadow-sm">.</button>
+          </div>
         </div>
 
+        <!-- Non-cash placeholder -->
+        <div v-else class="flex-1 flex items-center justify-center">
+          <div class="text-center text-gray-400">
+            <UIcon name="i-lucide-credit-card" class="w-16 h-16 mx-auto mb-4 opacity-30" />
+            <p class="font-medium">Present {{ paymentMethod === 'qris' ? 'QR code' : 'card' }} to terminal</p>
+            <p class="text-sm mt-1">Waiting for payment confirmation...</p>
+          </div>
+        </div>
+
+        <!-- Complete Order Button -->
         <button
-          @click="openPayment"
-          class="w-full flex items-center justify-center gap-3 py-4 rounded-xl bg-[#1E293B] text-white font-bold text-lg hover:bg-[#334155] transition-colors disabled:opacity-50"
-          :disabled="orderItems.length === 0"
+          @click="processPayment"
+          :disabled="!canPay || isProcessing"
+          class="mt-6 w-full flex items-center justify-between py-5 px-6 rounded-xl bg-[#162456] text-white font-bold text-lg hover:bg-[#1d2f6b] transition-colors disabled:opacity-50"
         >
-          <UIcon name="i-lucide-wallet" class="w-5 h-5" />
-          Checkout — {{ formatCurrency(total) }}
+          <span class="flex items-center gap-2">
+            <UIcon v-if="isProcessing" name="i-lucide-loader-2" class="w-5 h-5 animate-spin" />
+            Complete Order
+          </span>
+          <span>{{ formatPrice(total) }} →</span>
         </button>
+      </div>
+
+      <!-- Right: Transaction Details -->
+      <div class="w-72 bg-white border-l border-gray-200 flex flex-col p-6 shrink-0">
+        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-8">Transaction Details</h3>
+
+        <div class="space-y-6 flex-1">
+          <div>
+            <p class="text-sm text-gray-500 mb-1">Total Due</p>
+            <p class="text-2xl font-bold text-gray-900">{{ formatPrice(total) }}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-500 mb-1">Tendered</p>
+            <p class="text-2xl font-bold text-gray-900">{{ formatPrice(parseFloat(cashReceived) || 0) }}</p>
+          </div>
+          <div v-if="(parseFloat(cashReceived) || 0) >= total" class="pt-4 border-t border-gray-200">
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Change Due</p>
+            <p class="text-3xl font-bold text-gray-900">{{ formatPrice(change) }}</p>
+            <p class="text-xs text-gray-400 mt-1">Please return change to customer.</p>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Variation Picker Modal -->
-    <UModal v-model:open="showVariationPicker">
-      <template #content>
-        <div class="p-6 bg-white" v-if="pickingProduct">
-          <div class="flex items-center gap-4 mb-6">
-            <div class="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-              <img v-if="pickingProduct.image" :src="pickingProduct.image" class="w-full h-full object-cover" />
-              <div v-else class="w-full h-full flex items-center justify-center">
-                <UIcon name="i-lucide-coffee" class="w-6 h-6 text-gray-400" />
+    <!-- MAIN POS VIEW -->
+    <template v-else>
+      <!-- Left Sidebar: Categories -->
+      <aside class="w-44 bg-white border-r border-gray-200 flex flex-col shrink-0">
+        <div class="px-4 py-4">
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Categories</p>
+        </div>
+        <nav class="flex-1 px-2 space-y-1 overflow-y-auto">
+          <button
+            v-for="cat in categories"
+            :key="cat"
+            @click="activeCategory = cat"
+            :class="[
+              'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left',
+              activeCategory === cat
+                ? 'bg-[#162456] text-white shadow-md'
+                : 'text-gray-600 hover:bg-gray-100'
+            ]"
+          >
+            <UIcon :name="categoryIcons[cat] || 'i-lucide-tag'" class="w-5 h-5 flex-shrink-0" />
+            {{ cat }}
+          </button>
+        </nav>
+
+        <!-- Order Type Selector -->
+        <div class="p-3 border-t border-gray-100">
+          <p class="text-[10px] font-semibold text-gray-400 uppercase mb-2">Order Type</p>
+          <div class="flex gap-1">
+            <button
+              v-for="type in (['dine-in', 'takeaway', 'delivery'] as const)"
+              :key="type"
+              @click="orderType = type"
+              :class="[
+                'flex-1 py-2 text-xs font-semibold rounded-lg transition-colors text-center',
+                orderType === type ? 'bg-[#162456] text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              ]"
+            >
+              {{ (orderTypeLabels as any)[type] }}
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center: Product Grid -->
+      <div class="flex-1 flex flex-col p-5 overflow-hidden bg-gray-50/50">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-xl font-bold text-gray-900">Choose Order</h2>
+            <p class="text-sm text-gray-500">Select items to add</p>
+          </div>
+          <span class="bg-emerald-50 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-emerald-200">
+            {{ filteredProducts.length }} items
+          </span>
+        </div>
+
+        <div v-if="loading" class="flex-1 flex items-center justify-center">
+          <UIcon name="i-lucide-loader-2" class="w-8 h-8 animate-spin text-gray-400" />
+        </div>
+
+        <div v-else-if="filteredProducts.length === 0" class="flex-1 flex items-center justify-center">
+          <div class="text-center text-gray-400">
+            <UIcon name="i-lucide-package" class="w-12 h-12 mx-auto mb-3 opacity-40" />
+            <p class="text-lg font-medium mb-1">No products found</p>
+            <UButton to="/backoffice/products" color="primary" variant="soft" label="Go to Products" icon="i-lucide-arrow-right" />
+          </div>
+        </div>
+
+        <div v-else class="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div
+              v-for="product in filteredProducts"
+              :key="product.id"
+              class="bg-[#162456] rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1 group flex flex-col"
+              @click="handleProductClick(product)"
+            >
+              <div class="aspect-[4/3] w-full relative overflow-hidden">
+                <img v-if="product.image" :src="product.image" :alt="product.name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                <div v-else class="w-full h-full flex items-center justify-center bg-[#1d2f6b]">
+                  <UIcon name="i-lucide-coffee" class="w-12 h-12 text-blue-300/30" />
+                </div>
+                <span class="absolute top-3 left-3 bg-emerald-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md">
+                  {{ formatPrice(product.price) }}
+                </span>
+                <span v-if="product.variations.length > 0" class="absolute top-3 right-3 bg-purple-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                  {{ product.variations.length }} options
+                </span>
+              </div>
+              <div class="p-3">
+                <h3 class="font-semibold text-white text-sm leading-tight line-clamp-1">{{ product.name }}</h3>
+                <p class="text-blue-200/50 text-xs mt-1 line-clamp-1">{{ product.description || product.category }}</p>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Sidebar: Order Summary -->
+      <div class="w-80 lg:w-96 bg-white border-l border-gray-200 flex flex-col shrink-0">
+        <div class="px-5 py-4 border-b border-gray-100">
+          <div class="flex items-center justify-between">
+            <h2 class="font-bold text-lg text-gray-900">Current Order</h2>
+            <span class="bg-[#162456] text-white text-xs font-bold w-8 h-8 rounded-lg flex items-center justify-center">
+              {{ (orderTypeLabels as any)[orderType] }}
+            </span>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">{{ (orderTypeNames as any)[orderType] }} • {{ orderItems.length }} item{{ orderItems.length !== 1 ? 's' : '' }}</p>
+        </div>
+
+        <div class="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar space-y-3">
+          <div v-if="orderItems.length === 0" class="flex flex-col items-center justify-center h-full text-center text-gray-400 space-y-4">
+            <UIcon name="i-lucide-shopping-cart" class="w-12 h-12 text-gray-200" />
             <div>
-              <h3 class="text-lg font-bold text-gray-900">{{ pickingProduct.name }}</h3>
-              <p class="text-sm text-gray-500">Base price: {{ formatCurrency(pickingProduct.price) }}</p>
+              <p class="text-sm font-medium">Order is empty</p>
+              <p class="text-xs mt-1">Select items from the menu to get started.</p>
             </div>
           </div>
 
+          <div v-for="item in orderItems" :key="item.id + JSON.stringify(item.variationSnapshot)" class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+              <img v-if="item.image" :src="item.image" :alt="item.name" class="w-full h-full object-cover" />
+              <div v-else class="w-full h-full flex items-center justify-center"><UIcon name="i-lucide-coffee" class="w-5 h-5 text-gray-400" /></div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h4 class="font-semibold text-sm text-gray-900 truncate">{{ item.name }}</h4>
+              <p v-if="item.variationLabel" class="text-[10px] text-purple-600 font-medium">{{ item.variationLabel }}</p>
+              <p class="text-xs text-gray-500">{{ formatPrice(item.finalPrice) }}</p>
+            </div>
+            <div class="flex items-center gap-1 bg-gray-50 rounded-lg border border-gray-200 px-1 py-0.5">
+              <button class="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-200 rounded transition-colors" @click.stop="updateQuantity(item, -1)">
+                <UIcon name="i-lucide-minus" class="w-3.5 h-3.5" />
+              </button>
+              <span class="w-6 text-center text-sm font-semibold text-gray-900">{{ item.quantity }}</span>
+              <button class="w-7 h-7 flex items-center justify-center text-gray-500 hover:bg-gray-200 rounded transition-colors" @click.stop="updateQuantity(item, 1)">
+                <UIcon name="i-lucide-plus" class="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Totals & Actions -->
+        <div class="border-t border-gray-200 p-5">
+          <div class="space-y-2 mb-4">
+            <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span class="font-medium text-gray-900">{{ formatPrice(subtotal) }}</span></div>
+            <div class="flex justify-between text-sm"><span class="text-gray-500">Discount</span><span class="font-medium text-gray-900">{{ formatPrice(discount) }}</span></div>
+            <div class="flex justify-between text-sm"><span class="text-gray-500">Tax (10%)</span><span class="font-medium text-gray-900">{{ formatPrice(tax) }}</span></div>
+            <div class="border-t border-dashed border-gray-200 my-2 pt-2">
+              <div class="flex justify-between items-center">
+                <span class="font-semibold text-gray-900">Total</span>
+                <span class="font-bold text-2xl text-gray-900">{{ formatPrice(total) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex gap-3 mb-3">
+            <button class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors disabled:opacity-40" :disabled="orderItems.length === 0" @click="clearOrder">
+              Hold Order
+            </button>
+            <button class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors" @click="showNoteModal = true">
+              Add Note
+            </button>
+          </div>
+
+          <button
+            @click="openCheckout"
+            class="w-full flex items-center justify-center gap-3 py-4 rounded-xl bg-[#162456] text-white font-bold text-lg hover:bg-[#1d2f6b] transition-colors disabled:opacity-50"
+            :disabled="orderItems.length === 0"
+          >
+            <UIcon name="i-lucide-wallet" class="w-5 h-5" />
+            Checkout
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <!-- Variation Picker Modal (Redesigned) -->
+    <UModal v-model:open="showVariationPicker">
+      <template #content>
+        <div class="p-6 bg-white max-w-lg" v-if="pickingProduct">
+          <!-- Header: Product info -->
+          <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-4">
+              <div class="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+                <img v-if="pickingProduct.image" :src="pickingProduct.image" class="w-full h-full object-cover" />
+                <div v-else class="w-full h-full flex items-center justify-center"><UIcon name="i-lucide-coffee" class="w-6 h-6 text-gray-400" /></div>
+              </div>
+              <div>
+                <h3 class="text-lg font-bold text-gray-900">{{ pickingProduct.name }}</h3>
+                <p v-if="pickingProduct.description" class="text-xs text-gray-500">{{ pickingProduct.description }}</p>
+                <p class="text-sm font-semibold text-gray-900 mt-0.5">{{ formatPrice(pickingProduct.price) }}</p>
+              </div>
+            </div>
+            <button @click="showVariationPicker = false" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
+              <UIcon name="i-lucide-x" class="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+
+          <!-- Variation Groups -->
           <div class="space-y-5">
             <div v-for="variation in pickingProduct.variations" :key="variation.id">
-              <p class="text-sm font-semibold text-gray-700 mb-2">{{ variation.label }}</p>
+              <p class="text-sm font-bold text-gray-700 mb-2.5 flex items-center gap-1.5">
+                <span>{{ variation.label }}</span>
+              </p>
               <div class="flex flex-wrap gap-2">
                 <button
                   v-for="option in (variation.options || [])"
                   :key="option.name"
                   @click="selectedVariations[variation.label] = option"
                   :class="[
-                    'px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all',
+                    'px-5 py-2.5 rounded-xl text-sm font-medium border-2 transition-all',
                     selectedVariations[variation.label]?.name === option.name
-                      ? 'border-[#1E293B] bg-[#1E293B] text-white'
+                      ? 'border-[#162456] bg-[#162456] text-white'
                       : 'border-gray-200 text-gray-700 hover:border-gray-400'
                   ]"
                 >
                   {{ option.name }}
-                  <span v-if="option.price_adj > 0" class="text-xs ml-1 opacity-70">+{{ formatCurrency(option.price_adj) }}</span>
+                  <span v-if="option.price_adj > 0" class="text-xs ml-1 opacity-70">+{{ formatPrice(option.price_adj) }}</span>
                 </button>
               </div>
             </div>
           </div>
 
-          <div class="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
-            <p class="font-bold text-lg text-gray-900">
-              {{ formatCurrency(pickingProduct.price + Object.values(selectedVariations).reduce((s: number, o: any) => s + (o.price_adj || 0), 0)) }}
-            </p>
-            <div class="flex gap-3">
-              <UButton color="neutral" variant="ghost" label="Cancel" @click="showVariationPicker = false" />
-              <UButton color="primary" label="Add to Order" @click="confirmVariation" />
+          <!-- Footer: Qty + Add to Cart -->
+          <div class="flex items-center justify-between mt-6 pt-5 border-t border-gray-100">
+            <div class="flex items-center gap-3 bg-gray-100 rounded-xl px-2 py-1">
+              <button @click="pickerQty = Math.max(1, pickerQty - 1)" class="w-9 h-9 rounded-lg flex items-center justify-center hover:bg-gray-200 transition-colors">
+                <UIcon name="i-lucide-minus" class="w-4 h-4 text-gray-600" />
+              </button>
+              <span class="w-8 text-center text-lg font-bold text-gray-900">{{ pickerQty }}</span>
+              <button @click="pickerQty++" class="w-9 h-9 rounded-lg flex items-center justify-center hover:bg-gray-200 transition-colors">
+                <UIcon name="i-lucide-plus" class="w-4 h-4 text-gray-600" />
+              </button>
             </div>
+            <button @click="confirmVariation" class="flex-1 ml-4 py-3.5 rounded-xl bg-[#162456] text-white font-bold text-sm hover:bg-[#1d2f6b] transition-colors flex items-center justify-center gap-2">
+              Add to Cart
+              <span class="bg-white/20 px-2 py-0.5 rounded-md text-xs">{{ formatPrice(pickerTotal) }}</span>
+            </button>
           </div>
         </div>
       </template>
@@ -539,83 +695,6 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
       </template>
     </UModal>
 
-    <!-- Payment Modal -->
-    <UModal v-model:open="showPaymentModal">
-      <template #content>
-        <div class="p-6 bg-white min-w-[400px]">
-          <h3 class="text-lg font-bold text-gray-900 mb-1">Payment</h3>
-          <p class="text-sm text-gray-500 mb-6">Select payment method and confirm</p>
-
-          <!-- Order Summary -->
-          <div class="bg-gray-50 rounded-xl p-4 mb-6">
-            <div class="flex justify-between text-sm mb-1">
-              <span class="text-gray-500">{{ orderItems.length }} item(s)</span>
-              <span class="text-gray-500">{{ (orderTypeNames as any)[orderType] }}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="font-semibold text-gray-900">Total</span>
-              <span class="text-2xl font-bold text-gray-900">{{ formatCurrency(total) }}</span>
-            </div>
-          </div>
-
-          <!-- Payment Methods -->
-          <p class="text-sm font-semibold text-gray-700 mb-3">Payment Method</p>
-          <div class="grid grid-cols-2 gap-3 mb-6">
-            <button
-              v-for="pm in ([
-                { id: 'cash', icon: 'i-lucide-banknote', label: 'Cash' },
-                { id: 'qris', icon: 'i-lucide-qr-code', label: 'QRIS' },
-                { id: 'debit', icon: 'i-lucide-credit-card', label: 'Debit Card' },
-                { id: 'credit', icon: 'i-lucide-credit-card', label: 'Credit Card' }
-              ] as const)"
-              :key="pm.id"
-              @click="paymentMethod = pm.id as any"
-              :class="[
-                'flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left',
-                paymentMethod === pm.id
-                  ? 'border-[#1E293B] bg-[#1E293B] text-white'
-                  : 'border-gray-200 text-gray-700 hover:border-gray-400'
-              ]"
-            >
-              <UIcon :name="pm.icon" class="w-5 h-5" />
-              <span class="font-medium text-sm">{{ pm.label }}</span>
-            </button>
-          </div>
-
-          <!-- Cash: Amount received -->
-          <div v-if="paymentMethod === 'cash'" class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Amount Received</label>
-            <UInput v-model="cashReceived" type="number" placeholder="Enter amount" class="text-lg" />
-            <!-- Quick cash buttons -->
-            <div class="flex gap-2 mt-2">
-              <button v-for="amount in [total, Math.ceil(total / 10000) * 10000, Math.ceil(total / 50000) * 50000, 100000]" :key="amount"
-                @click="cashReceived = amount.toString()"
-                class="flex-1 py-2 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-              >
-                {{ formatCurrency(amount) }}
-              </button>
-            </div>
-            <div v-if="parseInt(cashReceived) >= total" class="mt-3 bg-green-50 rounded-lg p-3 flex justify-between items-center">
-              <span class="text-sm text-green-700 font-medium">Change</span>
-              <span class="text-lg font-bold text-green-700">{{ formatCurrency(change) }}</span>
-            </div>
-          </div>
-
-          <div class="flex gap-3">
-            <UButton color="neutral" variant="ghost" label="Cancel" @click="showPaymentModal = false" class="flex-1" />
-            <button
-              @click="processPayment"
-              :disabled="!canPay || isProcessing"
-              class="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              <UIcon v-if="isProcessing" name="i-lucide-loader-2" class="w-4 h-4 animate-spin" />
-              <span v-else>Confirm Payment</span>
-            </button>
-          </div>
-        </div>
-      </template>
-    </UModal>
-
     <!-- Order Success Modal -->
     <UModal v-model:open="showSuccessModal">
       <template #content>
@@ -629,12 +708,12 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
           <div class="bg-gray-50 rounded-xl p-4 text-left space-y-2 mb-6">
             <div v-for="item in completedOrder.items" :key="item.id" class="flex justify-between text-sm">
               <span class="text-gray-600">{{ item.name }} <span v-if="item.variationLabel" class="text-purple-600">({{ item.variationLabel }})</span> × {{ item.quantity }}</span>
-              <span class="font-medium text-gray-900">{{ formatCurrency(item.finalPrice * item.quantity) }}</span>
+              <span class="font-medium text-gray-900">{{ formatPrice(item.finalPrice * item.quantity) }}</span>
             </div>
             <div class="border-t border-dashed border-gray-300 pt-2 mt-2">
               <div class="flex justify-between font-bold text-lg">
                 <span>Total</span>
-                <span>{{ formatCurrency(completedOrder.total) }}</span>
+                <span>{{ formatPrice(completedOrder.total) }}</span>
               </div>
             </div>
             <div class="flex justify-between text-sm text-gray-500">
@@ -643,14 +722,11 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
             </div>
             <div v-if="completedOrder.change > 0" class="flex justify-between text-sm text-green-600">
               <span>Change</span>
-              <span class="font-bold">{{ formatCurrency(completedOrder.change) }}</span>
+              <span class="font-bold">{{ formatPrice(completedOrder.change) }}</span>
             </div>
           </div>
 
-          <button
-            @click="startNewOrder"
-            class="w-full py-4 rounded-xl bg-[#1E293B] text-white font-bold text-lg hover:bg-[#334155] transition-colors"
-          >
+          <button @click="startNewOrder" class="w-full py-4 rounded-xl bg-[#162456] text-white font-bold text-lg hover:bg-[#1d2f6b] transition-colors">
             New Order
           </button>
         </div>

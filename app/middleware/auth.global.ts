@@ -13,21 +13,16 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
     // If logged in and on auth page, redirect away
     if (isAuthPage && user.value) {
-        // Check onboarding status
-        const { data: profile } = await client
-            .from('profiles')
-            .select('onboarding_completed, role')
-            .eq('id', user.value.id)
-            .single()
-
-        if (profile && !profile.onboarding_completed) {
-            return navigateTo('/onboarding')
-        }
         return navigateTo('/backoffice')
     }
 
-    // If logged in and on protected route, check onboarding
+    // Check onboarding ONLY when navigating to backoffice or cashier (not on every route)
     if (isProtected && user.value && to.path !== '/onboarding') {
+        // Use a cookie to cache onboarding status so we don't query on every navigation
+        const onboardingDone = useCookie('onboarding_done')
+
+        if (onboardingDone.value === 'true') return // Already verified
+
         const { data: profile } = await client
             .from('profiles')
             .select('onboarding_completed')
@@ -37,5 +32,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
         if (profile && !profile.onboarding_completed) {
             return navigateTo('/onboarding')
         }
+
+        // Cache the result so we don't check again
+        onboardingDone.value = 'true'
     }
 })

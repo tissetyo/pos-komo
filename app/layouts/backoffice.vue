@@ -4,6 +4,8 @@ const user = useSupabaseUser()
 const profile = ref<any>(null)
 const outlet = ref<any>(null)
 const reportsOpen = ref(false)
+const userMenuOpen = ref(false)
+const { loadCurrency } = useCurrency()
 
 onMounted(async () => {
   if (user.value) {
@@ -14,10 +16,16 @@ onMounted(async () => {
       .single()
     profile.value = data
     outlet.value = data?.outlets || null
+    if (outlet.value?.id) {
+      await loadCurrency(outlet.value.id)
+    }
   }
 })
 
 const handleLogout = async () => {
+  // Clear onboarding cache
+  const onboardingDone = useCookie('onboarding_done')
+  onboardingDone.value = null
   await client.auth.signOut()
   navigateTo('/login')
 }
@@ -48,14 +56,14 @@ const reportItems = [
 <template>
   <div class="h-screen w-screen bg-gray-50 flex font-sans overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-56 bg-[#1E293B] flex flex-col flex-shrink-0 z-10">
-      <!-- Branding — shows real outlet name -->
+    <aside class="w-56 bg-[#162456] flex flex-col flex-shrink-0 z-10">
+      <!-- Branding -->
       <div class="h-16 flex items-center px-5 border-b border-white/10">
         <div class="flex items-center gap-2 cursor-pointer" @click="navigateTo('/')">
           <UIcon name="i-lucide-box" class="w-6 h-6 text-white" />
           <div class="flex flex-col leading-tight min-w-0">
             <span class="font-bold text-white text-sm truncate">{{ outlet?.name || 'My Store' }}</span>
-            <span class="text-gray-400 text-[10px] font-normal">Backoffice</span>
+            <span class="text-blue-300/60 text-[10px] font-normal">Backoffice</span>
           </div>
         </div>
       </div>
@@ -69,8 +77,8 @@ const reportItems = [
           class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
           :class="[
             route.path === item.to || (item.to !== '/backoffice' && route.path.startsWith(item.to))
-              ? 'bg-white/10 text-white'
-              : 'text-gray-400 hover:bg-white/5 hover:text-white'
+              ? 'bg-white/15 text-white'
+              : 'text-blue-200/70 hover:bg-white/5 hover:text-white'
           ]"
         >
           <UIcon :name="item.icon" class="w-5 h-5 flex-shrink-0" />
@@ -82,7 +90,7 @@ const reportItems = [
           <button
             class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors w-full text-left"
             :class="[
-              route.path.includes('sales-report') ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+              route.path.includes('sales-report') ? 'bg-white/15 text-white' : 'text-blue-200/70 hover:bg-white/5 hover:text-white'
             ]"
             @click="reportsOpen = !reportsOpen"
           >
@@ -101,7 +109,7 @@ const reportItems = [
               :to="sub.to"
               class="block px-3 py-2 rounded-lg text-sm transition-colors"
               :class="[
-                route.path === sub.to ? 'text-white bg-white/10' : 'text-gray-500 hover:text-gray-300'
+                route.path === sub.to ? 'text-white bg-white/10' : 'text-blue-300/50 hover:text-blue-200'
               ]"
             >
               {{ sub.label }}
@@ -130,10 +138,37 @@ const reportItems = [
         </div>
         <div class="flex items-center gap-4">
           <UButton icon="i-lucide-bell" color="neutral" variant="ghost" />
-          <div class="flex items-center gap-2 cursor-pointer" @click="handleLogout" title="Click to Logout">
-            <UIcon name="i-lucide-user" class="w-4 h-4 text-gray-400" />
-            <span class="text-sm font-medium text-gray-700">{{ profile?.full_name || user?.email || 'User' }}</span>
-            <UIcon name="i-lucide-chevron-down" class="w-4 h-4 text-gray-400" />
+          <!-- User dropdown menu -->
+          <div class="relative">
+            <div
+              class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded-lg px-2 py-1.5 transition-colors"
+              @click="userMenuOpen = !userMenuOpen"
+            >
+              <div class="w-8 h-8 rounded-full bg-[#162456] flex items-center justify-center text-white text-xs font-bold">
+                {{ (profile?.full_name || user?.email || 'U').charAt(0).toUpperCase() }}
+              </div>
+              <span class="text-sm font-medium text-gray-700">{{ profile?.full_name || user?.email || 'User' }}</span>
+              <UIcon name="i-lucide-chevron-down" class="w-4 h-4 text-gray-400" />
+            </div>
+            <!-- Dropdown -->
+            <div
+              v-show="userMenuOpen"
+              class="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50"
+              @mouseleave="userMenuOpen = false"
+            >
+              <div class="px-4 py-2 border-b border-gray-100">
+                <p class="text-sm font-medium text-gray-900 truncate">{{ profile?.full_name || 'User' }}</p>
+                <p class="text-xs text-gray-500 truncate">{{ user?.email }}</p>
+              </div>
+              <NuxtLink to="/backoffice/settings" class="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors" @click="userMenuOpen = false">
+                <UIcon name="i-lucide-settings" class="w-4 h-4 text-gray-400" />
+                Settings
+              </NuxtLink>
+              <button class="flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors w-full text-left" @click="handleLogout">
+                <UIcon name="i-lucide-log-out" class="w-4 h-4" />
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>

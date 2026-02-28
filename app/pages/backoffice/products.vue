@@ -8,17 +8,6 @@ const categories = ref<any[]>([])
 const loading = ref(true)
 const search = ref('')
 const selectedCategoryFilter = ref('All Categories')
-const isAddModalOpen = ref(false)
-
-// New product form
-const newProduct = ref({
-  name: '',
-  category: '',
-  price: '',
-  sku: '',
-  stock: ''
-})
-
 const outletId = ref<string | null>(null)
 
 const columns = [
@@ -34,13 +23,7 @@ const fetchProducts = async () => {
   loading.value = true
   try {
     if (!user.value) return
-
-    const { data: profile } = await client
-      .from('profiles')
-      .select('outlet_id')
-      .eq('id', user.value.id)
-      .single()
-
+    const { data: profile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
     outletId.value = profile?.outlet_id || null
     if (!outletId.value) return
 
@@ -56,12 +39,7 @@ const fetchProducts = async () => {
       visible: p.is_active
     }))
 
-    // Fetch categories
-    const { data: cats } = await client
-      .from('categories')
-      .select('id, name')
-      .eq('outlet_id', outletId.value)
-
+    const { data: cats } = await client.from('categories').select('id, name').eq('outlet_id', outletId.value)
     categories.value = cats || []
   } finally {
     loading.value = false
@@ -85,52 +63,7 @@ const categoryFilterOptions = computed(() => {
 
 const toggleVisibility = async (product: any) => {
   product.visible = !product.visible
-  await client
-    .from('products')
-    .update({ is_active: product.visible })
-    .eq('id', product.id)
-}
-
-const savingProduct = ref(false)
-const saveProduct = async () => {
-  if (!newProduct.value.name || !newProduct.value.price || !outletId.value) return
-  savingProduct.value = true
-
-  try {
-    // Create or find category
-    let categoryId = null
-    if (newProduct.value.category) {
-      const existing = categories.value.find((c: any) => c.name === newProduct.value.category)
-      if (existing) {
-        categoryId = existing.id
-      } else {
-        const { data: cat } = await client
-          .from('categories')
-          .insert({ name: newProduct.value.category, outlet_id: outletId.value })
-          .select()
-          .single()
-        if (cat) categoryId = cat.id
-      }
-    }
-
-    await client
-      .from('products')
-      .insert({
-        name: newProduct.value.name,
-        price: parseInt(newProduct.value.price),
-        sku: newProduct.value.sku || null,
-        stock: newProduct.value.stock ? parseInt(newProduct.value.stock) : null,
-        category_id: categoryId,
-        outlet_id: outletId.value,
-        is_active: true
-      })
-
-    isAddModalOpen.value = false
-    newProduct.value = { name: '', category: '', price: '', sku: '', stock: '' }
-    await fetchProducts()
-  } finally {
-    savingProduct.value = false
-  }
+  await client.from('products').update({ is_active: product.visible }).eq('id', product.id)
 }
 
 const deleteProduct = async (product: any) => {
@@ -147,14 +80,16 @@ const deleteProduct = async (product: any) => {
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Products & Menu</h2>
         <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Manage your catalogue, pricing, inventory, and variants.</p>
       </div>
-      <UButton color="primary" label="New Product" icon="i-lucide-plus" @click="isAddModalOpen = true" />
+      <UButton to="/backoffice/products/new" color="primary" label="New Product" icon="i-lucide-plus" class="rounded-xl" />
     </div>
 
     <!-- Filters & Search -->
     <div class="bg-white dark:bg-gray-900 p-4 justify-between flex flex-col md:flex-row gap-4 items-center rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
        <UInput v-model="search" icon="i-lucide-search" placeholder="Search products or SKU..." class="w-full md:w-80" />
        <div class="flex flex-wrap gap-2 text-sm w-full md:w-auto">
-         <USelect v-model="selectedCategoryFilter" :options="categoryFilterOptions" class="w-48" />
+         <select v-model="selectedCategoryFilter" class="h-10 px-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary outline-none">
+           <option v-for="opt in categoryFilterOptions" :key="opt" :value="opt">{{ opt }}</option>
+         </select>
        </div>
     </div>
 
@@ -163,7 +98,7 @@ const deleteProduct = async (product: any) => {
       <UIcon name="i-lucide-package" class="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
       <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">No products yet</h3>
       <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Add your first product to start selling.</p>
-      <UButton color="primary" label="Add Product" icon="i-lucide-plus" @click="isAddModalOpen = true" />
+      <UButton to="/backoffice/products/new" color="primary" label="Add Product" icon="i-lucide-plus" />
     </div>
 
     <!-- Data Table -->
@@ -186,23 +121,23 @@ const deleteProduct = async (product: any) => {
         </template>
 
         <template #price-data="{ row }">
-          <span class="font-semibold text-gray-900 dark:text-white">
-            Rp {{ row.price.toLocaleString('id-ID') }}
-          </span>
+          <span class="font-semibold text-gray-900 dark:text-white">{{ row.price.toLocaleString('en-MY') }}</span>
         </template>
 
         <template #stock-data="{ row }">
           <div v-if="row.stock === null" class="text-gray-500 dark:text-gray-400"><UIcon name="i-lucide-infinity" class="w-4 h-4 ml-2" /></div>
-          <div v-else :class="['font-medium', row.stock === 0 ? 'text-red-500' : 'text-gray-900 dark:text-white']">
-            {{ row.stock }}
-          </div>
+          <div v-else :class="['font-medium', row.stock === 0 ? 'text-red-500' : 'text-gray-900 dark:text-white']">{{ row.stock }}</div>
         </template>
 
-         <template #visible-data="{ row }">
-          <div class="flex items-center gap-2">
-            <UToggle :model-value="row.visible" color="primary" @update:model-value="toggleVisibility(row)" />
-            <span class="text-xs text-gray-500 dark:text-gray-400 w-12">{{ row.visible ? 'Visible' : 'Hidden' }}</span>
-          </div>
+        <template #visible-data="{ row }">
+          <button
+            :class="['relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+              row.visible ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600']"
+            @click="toggleVisibility(row)"
+          >
+            <span :class="['inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow',
+              row.visible ? 'translate-x-6' : 'translate-x-1']" />
+          </button>
         </template>
 
         <template #actions-data="{ row }">
@@ -212,44 +147,5 @@ const deleteProduct = async (product: any) => {
         </template>
       </UTable>
     </div>
-
-    <!-- Add Product Modal -->
-    <UModal v-model:open="isAddModalOpen">
-      <template #content>
-        <div class="p-6 bg-white dark:bg-gray-900">
-          <div class="flex items-center justify-between mb-6">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Create New Product</h3>
-            <UButton color="neutral" variant="ghost" icon="i-lucide-x" @click="isAddModalOpen = false" />
-          </div>
-
-          <div class="space-y-4">
-            <UFormGroup label="Product Name" required>
-              <UInput v-model="newProduct.name" placeholder="e.g. Vanilla Ice Latte" />
-            </UFormGroup>
-            <div class="grid grid-cols-2 gap-4">
-              <UFormGroup label="Category">
-                <UInput v-model="newProduct.category" placeholder="e.g. Coffee" />
-              </UFormGroup>
-              <UFormGroup label="Base Price" required>
-                <UInput v-model="newProduct.price" type="number" placeholder="0" />
-              </UFormGroup>
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-              <UFormGroup label="SKU (Optional)">
-                <UInput v-model="newProduct.sku" placeholder="Leave blank to auto-generate" />
-              </UFormGroup>
-              <UFormGroup label="Initial Stock">
-                <UInput v-model="newProduct.stock" type="number" placeholder="Leave blank for unlimited" />
-              </UFormGroup>
-            </div>
-          </div>
-
-          <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
-            <UButton color="neutral" variant="ghost" label="Cancel" @click="isAddModalOpen = false" />
-            <UButton color="primary" label="Save Product" :loading="savingProduct" @click="saveProduct" />
-          </div>
-        </div>
-      </template>
-    </UModal>
   </div>
 </template>

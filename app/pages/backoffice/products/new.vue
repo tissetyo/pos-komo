@@ -89,9 +89,13 @@ const saveProduct = async () => {
       const ext = imageFile.value.name.split('.').pop()
       const path = `${outletId.value}/${Date.now()}.${ext}`
       const { error: uploadErr } = await client.storage.from('product-images').upload(path, imageFile.value)
-      if (!uploadErr) {
+      if (uploadErr) {
+        console.error('Image upload failed:', uploadErr.message)
+        alert('Image upload failed: ' + uploadErr.message + '. Make sure the "product-images" bucket exists in Supabase Storage and is set to Public.')
+      } else {
         const { data: urlData } = client.storage.from('product-images').getPublicUrl(path)
         imageUrl = urlData.publicUrl
+        console.log('Image uploaded, public URL:', imageUrl)
       }
     }
 

@@ -171,16 +171,16 @@ const newOrder = () => {
   customerPhone.value = ''
 }
 
-// Card colors for products without images
+// Card gradient styles (inline CSS — Tailwind can't detect dynamic class names)
 const cardColors = [
-  'bg-gradient-to-br from-orange-100 to-amber-50',
-  'bg-gradient-to-br from-blue-100 to-sky-50',
-  'bg-gradient-to-br from-green-100 to-emerald-50',
-  'bg-gradient-to-br from-purple-100 to-violet-50',
-  'bg-gradient-to-br from-pink-100 to-rose-50',
-  'bg-gradient-to-br from-yellow-100 to-amber-50',
-  'bg-gradient-to-br from-teal-100 to-cyan-50',
-  'bg-gradient-to-br from-red-100 to-orange-50',
+  'linear-gradient(135deg, #fed7aa, #fef3c7)',  // orange → amber (soft)
+  'linear-gradient(135deg, #bfdbfe, #e0f2fe)',  // blue → sky
+  'linear-gradient(135deg, #bbf7d0, #d1fae5)',  // green → emerald
+  'linear-gradient(135deg, #ddd6fe, #ede9fe)',  // purple → violet
+  'linear-gradient(135deg, #fbcfe8, #ffe4e6)',  // pink → rose
+  'linear-gradient(135deg, #fef08a, #fef3c7)',  // yellow → amber
+  'linear-gradient(135deg, #99f6e4, #cffafe)',  // teal → cyan
+  'linear-gradient(135deg, #fecaca, #fed7aa)',  // red → orange
 ]
 
 const foodEmoji = (category: string) => {
@@ -359,8 +359,8 @@ const foodEmoji = (category: string) => {
         >
           <!-- Product Image / Colored Placeholder -->
           <div
-            :class="['w-full aspect-[4/3] rounded-xl flex items-center justify-center mb-3 overflow-hidden',
-              !product.image_url ? cardColors[index % cardColors.length] : '']"
+            class="w-full aspect-[4/3] rounded-xl flex items-center justify-center mb-3 overflow-hidden"
+            :style="!product.image_url ? { background: cardColors[index % cardColors.length] } : {}"
           >
             <img v-if="product.image_url" :src="product.image_url" class="w-full h-full object-cover" />
             <span v-else class="text-3xl">{{ foodEmoji(product.category) }}</span>

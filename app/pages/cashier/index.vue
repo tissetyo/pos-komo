@@ -24,18 +24,18 @@ const categoryIcons: Record<string, string> = {
   'Beverages': 'i-lucide-coffee',
 }
 
-// Card colors for products without images
+// Card gradient styles (inline CSS — Tailwind can't detect dynamic class names)
 const cardColors = [
-  'from-orange-400 to-amber-300',
-  'from-sky-400 to-blue-300',
-  'from-emerald-400 to-green-300',
-  'from-violet-400 to-purple-300',
-  'from-pink-400 to-rose-300',
-  'from-amber-400 to-yellow-300',
-  'from-teal-400 to-cyan-300',
-  'from-red-400 to-orange-300',
-  'from-indigo-400 to-blue-300',
-  'from-lime-400 to-green-300',
+  'linear-gradient(135deg, #fb923c, #fbbf24)',  // orange → amber
+  'linear-gradient(135deg, #38bdf8, #60a5fa)',  // sky → blue
+  'linear-gradient(135deg, #34d399, #4ade80)',  // emerald → green
+  'linear-gradient(135deg, #a78bfa, #c084fc)',  // violet → purple
+  'linear-gradient(135deg, #f472b6, #fb7185)',  // pink → rose
+  'linear-gradient(135deg, #fbbf24, #facc15)',  // amber → yellow
+  'linear-gradient(135deg, #2dd4bf, #22d3ee)',  // teal → cyan
+  'linear-gradient(135deg, #f87171, #fb923c)',  // red → orange
+  'linear-gradient(135deg, #818cf8, #60a5fa)',  // indigo → blue
+  'linear-gradient(135deg, #a3e635, #4ade80)',  // lime → green
 ]
 
 const foodEmoji = (category: string) => {
@@ -562,7 +562,7 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
 
               <!-- No Image (Colorful Gradient Card) -->
               <template v-else>
-                <div :class="['w-full aspect-[4/3] flex flex-col items-center justify-center p-4 relative bg-gradient-to-br', cardColors[pIdx % cardColors.length]]">
+                <div class="w-full aspect-[4/3] flex flex-col items-center justify-center p-4 relative rounded-t-2xl" :style="{ background: cardColors[pIdx % cardColors.length] }">
                   <span class="text-4xl mb-2 drop-shadow-sm">{{ foodEmoji(product.category) }}</span>
                   <h3 class="font-bold text-white text-sm leading-tight text-center drop-shadow-sm line-clamp-2">{{ product.name }}</h3>
                   <span v-if="product.variations.length > 0" class="absolute top-2.5 right-2.5 bg-white/30 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md">

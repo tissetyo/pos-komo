@@ -24,6 +24,34 @@ const categoryIcons: Record<string, string> = {
   'Beverages': 'i-lucide-coffee',
 }
 
+// Card colors for products without images
+const cardColors = [
+  'from-orange-400 to-amber-300',
+  'from-sky-400 to-blue-300',
+  'from-emerald-400 to-green-300',
+  'from-violet-400 to-purple-300',
+  'from-pink-400 to-rose-300',
+  'from-amber-400 to-yellow-300',
+  'from-teal-400 to-cyan-300',
+  'from-red-400 to-orange-300',
+  'from-indigo-400 to-blue-300',
+  'from-lime-400 to-green-300',
+]
+
+const foodEmoji = (category: string) => {
+  const cat = (category || '').toLowerCase()
+  if (cat.includes('drink') || cat.includes('air') || cat.includes('minum') || cat.includes('beverage')) return '🥤'
+  if (cat.includes('nasi') || cat.includes('rice')) return '🍚'
+  if (cat.includes('mee') || cat.includes('noodle') || cat.includes('pasta')) return '🍜'
+  if (cat.includes('ayam') || cat.includes('chicken')) return '🍗'
+  if (cat.includes('ikan') || cat.includes('fish') || cat.includes('seafood')) return '🐟'
+  if (cat.includes('dessert') || cat.includes('sweet') || cat.includes('cake')) return '🍰'
+  if (cat.includes('snack') || cat.includes('goreng')) return '🍟'
+  if (cat.includes('soup') || cat.includes('sup')) return '🍲'
+  if (cat.includes('coffee') || cat.includes('kopi') || cat.includes('tea') || cat.includes('teh')) return '☕'
+  return '🍽️'
+}
+
 // Order State
 const orderItems = ref<any[]>([])
 const orderType = ref<'dine-in' | 'takeaway' | 'delivery'>('dine-in')
@@ -510,10 +538,9 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
         <div v-else class="flex-1 overflow-y-auto pr-1 custom-scrollbar">
           <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             <div
-              v-for="product in filteredProducts"
+              v-for="(product, pIdx) in filteredProducts"
               :key="product.id"
               class="bg-white rounded-2xl overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1 border border-gray-100 flex flex-col group relative"
-              :class="{ '!bg-[#162456] !border-[#162456]': !product.image }"
               @click="handleProductClick(product)"
             >
               <!-- With Image -->
@@ -533,16 +560,18 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
                 </div>
               </template>
 
-              <!-- No Image (Solid Blue Card) -->
+              <!-- No Image (Colorful Gradient Card) -->
               <template v-else>
-                <div class="w-full h-full flex items-center justify-center p-4 min-h-[140px] relative">
-                  <h3 class="font-bold text-white text-lg leading-tight text-center p-2">{{ product.name }}</h3>
-                  <span class="absolute bottom-3 left-3 bg-[#0a1128]/80 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-lg">
-                    {{ formatPrice(product.price) }}
-                  </span>
-                  <span v-if="product.variations.length > 0" class="absolute top-3 right-3 bg-[#0a1128]/80 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                <div :class="['w-full aspect-[4/3] flex flex-col items-center justify-center p-4 relative bg-gradient-to-br', cardColors[pIdx % cardColors.length]]">
+                  <span class="text-4xl mb-2 drop-shadow-sm">{{ foodEmoji(product.category) }}</span>
+                  <h3 class="font-bold text-white text-sm leading-tight text-center drop-shadow-sm line-clamp-2">{{ product.name }}</h3>
+                  <span v-if="product.variations.length > 0" class="absolute top-2.5 right-2.5 bg-white/30 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
                     {{ product.variations.length }} options
                   </span>
+                </div>
+                <div class="p-3 bg-white flex-1 flex flex-col">
+                  <p class="text-gray-500 text-[11px] line-clamp-1 flex-1">{{ product.category }}</p>
+                  <span class="font-bold text-gray-900 text-sm">{{ formatPrice(product.price) }}</span>
                 </div>
               </template>
             </div>

@@ -13,8 +13,10 @@ const form = ref({
   price: '',
   cost: '',
   sku: '',
+  barcode: '',
   stock: '',
-  description: ''
+  description: '',
+  is_active: true
 })
 
 const categories = ref<any[]>([])
@@ -22,6 +24,38 @@ const imageFile = ref<File | null>(null)
 const imagePreview = ref<string | null>(null)
 const existingImageUrl = ref<string | null>(null)
 const variations = ref<{ id?: string; label: string; options: { name: string; price_adj: string }[] }[]>([])
+
+// Category dropdown
+const categorySearch = ref('')
+const showCategoryDropdown = ref(false)
+
+const filteredCategories = computed(() => {
+  const q = categorySearch.value.toLowerCase()
+  if (!q) return categories.value
+  return categories.value.filter((c: any) => c.name.toLowerCase().includes(q))
+})
+
+const showCreateOption = computed(() => {
+  const q = categorySearch.value.trim()
+  if (!q) return false
+  return !categories.value.some((c: any) => c.name.toLowerCase() === q.toLowerCase())
+})
+
+const selectCategory = (name: string) => {
+  form.value.category = name
+  categorySearch.value = name
+  showCategoryDropdown.value = false
+}
+
+const onCategoryInput = () => {
+  showCategoryDropdown.value = true
+  form.value.category = categorySearch.value
+}
+
+const onCategoryBlur = () => {
+  // Delay to allow click on dropdown item
+  setTimeout(() => { showCategoryDropdown.value = false }, 200)
+}
 
 // Load product data
 const loadProduct = async () => {
@@ -40,21 +74,25 @@ const loadProduct = async () => {
     .single()
 
   if (product) {
+    const catName = (product as any).categories?.name || ''
     form.value = {
-      name: product.name || '',
-      category: product.categories?.name || '',
-      price: String(product.price || ''),
-      cost: product.cost ? String(product.cost) : '',
-      sku: product.sku || '',
-      stock: product.stock !== null ? String(product.stock) : '',
-      description: product.description || ''
+      name: (product as any).name || '',
+      category: catName,
+      price: String((product as any).price || ''),
+      cost: (product as any).cost ? String((product as any).cost) : '',
+      sku: (product as any).sku || '',
+      barcode: (product as any).barcode || '',
+      stock: (product as any).stock !== null && (product as any).stock !== undefined ? String((product as any).stock) : '',
+      description: (product as any).description || '',
+      is_active: (product as any).is_active !== false
     }
-    existingImageUrl.value = product.image_url || null
-    imagePreview.value = product.image_url || null
+    categorySearch.value = catName
+    existingImageUrl.value = (product as any).image_url || null
+    imagePreview.value = (product as any).image_url || null
 
     // Load variations
-    if (product.product_variations?.length) {
-      variations.value = product.product_variations.map((v: any) => ({
+    if ((product as any).product_variations?.length) {
+      variations.value = (product as any).product_variations.map((v: any) => ({
         id: v.id,
         label: v.label || '',
         options: (v.options || []).map((o: any) => ({
@@ -108,7 +146,7 @@ const saveProduct = async () => {
       if (existing) {
         categoryId = existing.id
       } else {
-        const { data: cat } = await client.from('categories').insert({ name: form.value.category, outlet_id: outletId.value }).select().single()
+        const { data: cat } = await (client as any).from('categories').insert({ name: form.value.category, outlet_id: outletId.value }).select().single()
         if (cat) categoryId = cat.id
       }
     }
@@ -128,26 +166,28 @@ const saveProduct = async () => {
     }
 
     // 3. Update product
-    await client.from('products').update({
+    await (client as any).from('products').update({
       name: form.value.name,
       price: parseInt(form.value.price),
       cost: form.value.cost ? parseInt(form.value.cost) : null,
       sku: form.value.sku || null,
+      barcode: form.value.barcode || null,
       stock: form.value.stock ? parseInt(form.value.stock) : null,
       description: form.value.description || null,
       category_id: categoryId,
-      image_url: imageUrl
+      image_url: imageUrl,
+      is_active: form.value.is_active
     }).eq('id', productId)
 
     // 4. Update variations — delete old, insert new
-    await client.from('product_variations').delete().eq('product_id', productId)
+    await (client as any).from('product_variations').delete().eq('product_id', productId)
     const validVars = variations.value.filter(v => v.label && v.options.some(o => o.name))
     for (const v of validVars) {
       const options = v.options
         .filter(o => o.name)
         .map(o => ({ name: o.name, price_adj: parseInt(o.price_adj) || 0 }))
       if (options.length > 0) {
-        await client.from('product_variations').insert({
+        await (client as any).from('product_variations').insert({
           product_id: productId,
           label: v.label,
           options
@@ -175,9 +215,21 @@ const saveProduct = async () => {
       <!-- Header -->
       <div class="flex items-center gap-4 mb-8">
         <UButton to="/backoffice/products" color="neutral" variant="ghost" icon="i-lucide-arrow-left" />
-        <div>
+        <div class="flex-1">
           <h2 class="text-2xl font-bold text-gray-900">Edit Product</h2>
           <p class="text-gray-500 text-sm mt-1">Update product details, pricing, and variations.</p>
+        </div>
+        <!-- Active Toggle -->
+        <div class="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-2.5 border border-gray-200">
+          <span class="text-sm font-medium text-gray-700">Active</span>
+          <button
+            :class="['relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+              form.is_active ? 'bg-emerald-500' : 'bg-gray-300']"
+            @click="form.is_active = !form.is_active"
+          >
+            <span :class="['inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow',
+              form.is_active ? 'translate-x-6' : 'translate-x-1']" />
+          </button>
         </div>
       </div>
 
@@ -214,12 +266,39 @@ const saveProduct = async () => {
         </div>
 
         <div class="grid grid-cols-2 gap-6">
-          <div>
+          <!-- Category Dropdown -->
+          <div class="relative">
             <label class="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
-            <UInput v-model="form.category" placeholder="e.g. Coffee" class="w-full" />
-            <p v-if="categories.length > 0" class="text-xs text-gray-400 mt-1">
-              Existing: {{ categories.map((c: any) => c.name).join(', ') }}
-            </p>
+            <input
+              v-model="categorySearch"
+              @input="onCategoryInput"
+              @focus="showCategoryDropdown = true"
+              @blur="onCategoryBlur"
+              placeholder="Search or create category..."
+              class="w-full h-10 px-4 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+            />
+            <!-- Dropdown List -->
+            <div v-if="showCategoryDropdown && (filteredCategories.length > 0 || showCreateOption)" class="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+              <button
+                v-for="cat in filteredCategories"
+                :key="cat.id"
+                @mousedown.prevent="selectCategory(cat.name)"
+                :class="['w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors flex items-center gap-2',
+                  form.category === cat.name ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700']"
+              >
+                <UIcon v-if="form.category === cat.name" name="i-lucide-check" class="w-4 h-4 text-blue-500" />
+                <span :class="form.category === cat.name ? '' : 'ml-6'">{{ cat.name }}</span>
+              </button>
+              <!-- Create New Option -->
+              <button
+                v-if="showCreateOption"
+                @mousedown.prevent="selectCategory(categorySearch.trim())"
+                class="w-full text-left px-4 py-2.5 text-sm hover:bg-emerald-50 text-emerald-700 font-medium flex items-center gap-2 border-t border-gray-100"
+              >
+                <UIcon name="i-lucide-plus-circle" class="w-4 h-4" />
+                Create "{{ categorySearch.trim() }}"
+              </button>
+            </div>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">Base Price <span class="text-red-500">*</span></label>
@@ -227,18 +306,25 @@ const saveProduct = async () => {
           </div>
         </div>
 
-        <div class="grid grid-cols-3 gap-6">
+        <div class="grid grid-cols-2 gap-6">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">Cost Price</label>
-            <UInput v-model="form.cost" type="number" placeholder="For COGS" class="w-full" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1.5">SKU Code</label>
-            <UInput v-model="form.sku" placeholder="SKU" class="w-full" />
+            <UInput v-model="form.cost" type="number" placeholder="For COGS calculation" class="w-full" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">Stock</label>
             <UInput v-model="form.stock" type="number" placeholder="∞ if blank" class="w-full" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-6">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">SKU Code</label>
+            <UInput v-model="form.sku" placeholder="e.g. SKU-001" class="w-full" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Barcode</label>
+            <UInput v-model="form.barcode" placeholder="e.g. 8901234567890" class="w-full" />
           </div>
         </div>
       </div>

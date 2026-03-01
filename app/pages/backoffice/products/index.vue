@@ -331,6 +331,7 @@ const handleCSVUpload = async (e: Event) => {
             </td>
             <td class="py-4 px-5">
               <div class="flex gap-1">
+                <UButton color="neutral" variant="ghost" icon="i-lucide-pencil" size="xs" :to="`/backoffice/products/${product.id}`" />
                 <UButton color="neutral" variant="ghost" icon="i-lucide-trash-2" size="xs" @click="deleteProduct(product)" />
               </div>
             </td>

@@ -1,28 +1,11 @@
 <script setup lang="ts">
-const client = useSupabaseClient()
-const user = useSupabaseUser()
-const profile = ref<any>(null)
-const outlet = ref<any>(null)
+const { client, profile, outlet, user } = useUserProfile()
 const reportsOpen = ref(false)
 const userMenuOpen = ref(false)
 const { loadCurrency } = useCurrency()
 
-const loadProfile = async () => {
-  if (!user.value?.id) return
-  const { data } = await client
-    .from('profiles')
-    .select('*, outlets(*)')
-    .eq('id', user.value.id)
-    .single()
-  profile.value = data
-  outlet.value = data?.outlets || null
-  if (outlet.value?.id) {
-    await loadCurrency(outlet.value.id)
-  }
-}
-
-watch(user, (val) => {
-  if (val?.id) loadProfile()
+watch(outlet, (val) => {
+  if (val?.id) loadCurrency(val.id)
 }, { immediate: true })
 
 const handleLogout = async () => {

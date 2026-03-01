@@ -1,5 +1,5 @@
 /**
- * Shared composable to reliably get the authenticated user's profile and outlet ID.
+ * Shared composable to reliably get the authenticated user's profile and outlet.
  * Works around the issue where useSupabaseUser() returns truthy but .id is undefined
  * during SSR/hydration by using client.auth.getUser() as fallback.
  */
@@ -7,7 +7,9 @@ export const useUserProfile = () => {
     const client = useSupabaseClient()
     const user = useSupabaseUser()
     const outletId = ref<string | null>(null)
+    const outlet = ref<any>(null)
     const userId = ref<string | null>(null)
+    const profile = ref<any>(null)
     const profileReady = ref(false)
 
     const loadProfile = async () => {
@@ -27,13 +29,15 @@ export const useUserProfile = () => {
 
         userId.value = uid
 
-        const { data: profile } = await client
+        const { data: profileData } = await client
             .from('profiles')
-            .select('outlet_id')
+            .select('*, outlets(*)')
             .eq('id', uid)
             .single()
 
-        outletId.value = profile?.outlet_id || null
+        profile.value = profileData
+        outletId.value = profileData?.outlet_id || null
+        outlet.value = profileData?.outlets || null
         profileReady.value = true
     }
 
@@ -45,5 +49,6 @@ export const useUserProfile = () => {
         if (val?.id && !outletId.value) loadProfile()
     })
 
-    return { client, user, userId, outletId, profileReady, loadProfile }
+    return { client, user, userId, outletId, outlet, profile, profileReady, loadProfile }
 }
+

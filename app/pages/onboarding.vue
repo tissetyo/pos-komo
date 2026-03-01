@@ -103,7 +103,7 @@ onMounted(async () => {
 
 const saveProgress = async (step: number) => {
   if (!user.value) return
-  await client.from('profiles').update({ onboarding_step: step }).eq('id', user.value.id)
+  await (client as any).from('profiles').update({ onboarding_step: step }).eq('id', user.value.id)
 }
 
 const nextStep = async () => {
@@ -139,9 +139,9 @@ const prevStep = () => {
 
 const saveStoreInfo = async () => {
   if (!user.value) return
-  const { data: profile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
+  const { data: profile } = await (client as any).from('profiles').select('outlet_id').eq('id', user.value.id).single()
   if (profile?.outlet_id) {
-    await client.from('outlets').update({
+    await (client as any).from('outlets').update({
       name: storeInfo.value.name,
       city: storeInfo.value.city,
       timezone: storeInfo.value.timezone,
@@ -153,14 +153,14 @@ const saveStoreInfo = async () => {
 
 const saveFirstProduct = async () => {
   if (!user.value || !product.value.name || !product.value.price) return
-  const { data: profile } = await client.from('profiles').select('outlet_id').eq('id', user.value.id).single()
+  const { data: profile } = await (client as any).from('profiles').select('outlet_id').eq('id', user.value.id).single()
   if (!profile?.outlet_id) return
   let categoryId = null
   if (product.value.category) {
-    const { data: cat } = await client.from('categories').insert({ name: product.value.category, outlet_id: profile.outlet_id }).select().single()
+    const { data: cat } = await (client as any).from('categories').insert({ name: product.value.category, outlet_id: profile.outlet_id }).select().single()
     if (cat) categoryId = cat.id
   }
-  await client.from('products').insert({
+  await (client as any).from('products').insert({
     name: product.value.name,
     price: parseInt(product.value.price),
     category_id: categoryId,
@@ -173,7 +173,18 @@ const completeSetup = async () => {
   if (!user.value) return
   const updateData: any = { onboarding_completed: true, onboarding_step: totalSteps }
   if (pinString.value.length === 4) updateData.pin = pinString.value
-  await client.from('profiles').update(updateData).eq('id', user.value.id)
+
+  const { error } = await (client as any).from('profiles').update(updateData).eq('id', user.value.id)
+  if (error) {
+    console.error('Failed to complete onboarding:', error)
+    alert('Failed to save onboarding. Please try again.')
+    return
+  }
+
+  // Set cookie so middleware skips the onboarding check
+  const onboardingDone = useCookie('onboarding_done')
+  onboardingDone.value = 'true'
+
   navigateTo('/backoffice')
 }
 </script>

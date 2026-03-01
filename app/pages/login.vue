@@ -16,7 +16,7 @@ const handleLogin = async () => {
       password: password.value
     })
     if (error) throw error
-    const { data: profile } = await client
+    const { data: profile } = await (client as any)
       .from('profiles')
       .select('onboarding_completed, role')
       .eq('id', data.user.id)
@@ -24,8 +24,14 @@ const handleLogin = async () => {
     if (profile && !profile.onboarding_completed) {
       navigateTo('/onboarding')
     } else if (profile?.role === 'cashier') {
+      // Set onboarding cookie since they're past it
+      const onboardingDone = useCookie('onboarding_done')
+      onboardingDone.value = 'true'
       navigateTo('/cashier')
     } else {
+      // Set onboarding cookie since they're past it
+      const onboardingDone = useCookie('onboarding_done')
+      onboardingDone.value = 'true'
       navigateTo('/backoffice')
     }
   } catch (err: any) {

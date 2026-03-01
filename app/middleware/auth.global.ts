@@ -23,7 +23,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
         if (onboardingDone.value === 'true') return // Already verified
 
-        const { data: profile } = await client
+        const { data: profile } = await (client as any)
             .from('profiles')
             .select('onboarding_completed')
             .eq('id', user.value.id)

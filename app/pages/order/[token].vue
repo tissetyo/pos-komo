@@ -170,46 +170,78 @@ const newOrder = () => {
   customerName.value = ''
   customerPhone.value = ''
 }
+
+// Card colors for products without images
+const cardColors = [
+  'bg-gradient-to-br from-orange-100 to-amber-50',
+  'bg-gradient-to-br from-blue-100 to-sky-50',
+  'bg-gradient-to-br from-green-100 to-emerald-50',
+  'bg-gradient-to-br from-purple-100 to-violet-50',
+  'bg-gradient-to-br from-pink-100 to-rose-50',
+  'bg-gradient-to-br from-yellow-100 to-amber-50',
+  'bg-gradient-to-br from-teal-100 to-cyan-50',
+  'bg-gradient-to-br from-red-100 to-orange-50',
+]
+
+const foodEmoji = (category: string) => {
+  const cat = (category || '').toLowerCase()
+  if (cat.includes('drink') || cat.includes('air') || cat.includes('minum') || cat.includes('beverage')) return '🥤'
+  if (cat.includes('nasi') || cat.includes('rice')) return '🍚'
+  if (cat.includes('mee') || cat.includes('noodle') || cat.includes('pasta')) return '🍜'
+  if (cat.includes('ayam') || cat.includes('chicken')) return '🍗'
+  if (cat.includes('ikan') || cat.includes('fish') || cat.includes('seafood')) return '🐟'
+  if (cat.includes('dessert') || cat.includes('sweet') || cat.includes('cake')) return '🍰'
+  if (cat.includes('snack') || cat.includes('goreng')) return '🍟'
+  if (cat.includes('soup') || cat.includes('sup')) return '🍲'
+  if (cat.includes('coffee') || cat.includes('kopi') || cat.includes('tea') || cat.includes('teh')) return '☕'
+  return '🍽️'
+}
 </script>
 
 <template>
   <!-- Loading -->
-  <div v-if="loading" class="flex items-center justify-center min-h-screen">
+  <div v-if="loading" class="flex items-center justify-center min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
     <div class="text-center">
-      <div class="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-      <p class="text-gray-500 text-sm">Loading menu...</p>
+      <div class="w-12 h-12 border-4 border-orange-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+      <p class="text-gray-500 text-sm font-medium">Loading menu...</p>
     </div>
   </div>
 
   <!-- Error -->
-  <div v-else-if="errorMsg" class="flex items-center justify-center min-h-screen px-6">
+  <div v-else-if="errorMsg" class="flex items-center justify-center min-h-screen px-6 bg-gradient-to-br from-red-50 via-white to-orange-50">
     <div class="text-center">
-      <UIcon name="i-lucide-alert-circle" class="w-12 h-12 text-red-400 mx-auto mb-4" />
+      <div class="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <UIcon name="i-lucide-alert-circle" class="w-8 h-8 text-red-500" />
+      </div>
       <h2 class="text-xl font-bold text-gray-900 mb-2">Oops!</h2>
       <p class="text-gray-500">{{ errorMsg }}</p>
     </div>
   </div>
 
   <!-- Success -->
-  <div v-else-if="showSuccess" class="flex items-center justify-center min-h-screen px-6">
+  <div v-else-if="showSuccess" class="flex items-center justify-center min-h-screen px-6 bg-gradient-to-br from-green-50 via-white to-emerald-50">
     <div class="text-center max-w-sm">
-      <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-        <UIcon name="i-lucide-check" class="w-10 h-10 text-green-600" />
+      <div class="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-200">
+        <UIcon name="i-lucide-check" class="w-12 h-12 text-white" />
       </div>
-      <h2 class="text-2xl font-bold text-gray-900 mb-2">Order Placed!</h2>
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Order Placed! 🎉</h2>
       <p class="text-gray-500 mb-2">Your order has been sent to the kitchen.</p>
-      <p class="text-sm font-mono text-gray-400 mb-8">{{ completedOrderNumber }}</p>
-      <p class="text-lg font-semibold text-gray-900 mb-1">Table {{ tableData.table_number }}</p>
-      <p class="text-gray-500 text-sm mb-8">Please wait while we prepare your food.</p>
-      <UButton color="primary" label="Order More" icon="i-lucide-plus" block size="xl" class="rounded-xl font-bold" @click="newOrder" />
+      <p class="text-sm font-mono bg-gray-100 inline-block px-4 py-1.5 rounded-lg text-gray-500 mb-6">{{ completedOrderNumber }}</p>
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-8">
+        <p class="text-amber-800 font-semibold">📍 Table {{ tableData.table_number }}</p>
+        <p class="text-amber-600 text-sm mt-1">Please wait while we prepare your food.</p>
+      </div>
+      <button class="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-2xl px-6 py-4 font-bold text-base shadow-lg shadow-orange-200 active:scale-[0.98] transition-transform" @click="newOrder">
+        🍽️ Order More
+      </button>
     </div>
   </div>
 
   <!-- Checkout -->
-  <div v-else-if="showCheckout" class="min-h-screen bg-white">
+  <div v-else-if="showCheckout" class="min-h-screen bg-gray-50">
     <!-- Header -->
-    <div class="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 z-10">
-      <button @click="showCheckout = false" class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-gray-100">
+    <div class="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-4 py-3 flex items-center gap-3 z-10">
+      <button @click="showCheckout = false" class="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors">
         <UIcon name="i-lucide-arrow-left" class="w-5 h-5 text-gray-700" />
       </button>
       <h2 class="text-lg font-bold text-gray-900">Checkout</h2>
@@ -217,26 +249,29 @@ const newOrder = () => {
 
     <div class="px-4 py-6 space-y-6 max-w-lg mx-auto">
       <!-- Order Summary -->
-      <div>
-        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Your Order</h3>
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Your Order</h3>
         <div class="space-y-3">
           <div v-for="item in cart" :key="item.id" class="flex justify-between items-center">
-            <div>
-              <p class="font-medium text-gray-900">{{ item.name }}</p>
-              <p class="text-sm text-gray-500">× {{ item.quantity }}</p>
+            <div class="flex items-center gap-3">
+              <span class="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center text-sm">🍴</span>
+              <div>
+                <p class="font-medium text-gray-900 text-sm">{{ item.name }}</p>
+                <p class="text-xs text-gray-400">× {{ item.quantity }}</p>
+              </div>
             </div>
-            <span class="font-semibold text-gray-900">{{ formatPrice(item.price * item.quantity) }}</span>
+            <span class="font-semibold text-gray-900 text-sm">{{ formatPrice(item.price * item.quantity) }}</span>
           </div>
         </div>
-        <div class="border-t border-gray-200 mt-4 pt-4 flex justify-between">
+        <div class="border-t border-dashed border-gray-200 mt-4 pt-4 flex justify-between items-center">
           <span class="font-bold text-gray-900">Total</span>
-          <span class="text-xl font-bold text-gray-900">{{ formatPrice(cartTotal) }}</span>
+          <span class="text-xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">{{ formatPrice(cartTotal) }}</span>
         </div>
       </div>
 
       <!-- Customer Info -->
-      <div>
-        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Your Information</h3>
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Your Information</h3>
         <div class="space-y-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">Phone Number <span class="text-red-500">*</span></label>
@@ -245,7 +280,7 @@ const newOrder = () => {
               type="tel"
               inputmode="numeric"
               placeholder="e.g. 0123456789"
-              class="w-full h-12 px-4 rounded-xl border border-gray-300 bg-white text-gray-900 text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+              class="w-full h-12 px-4 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 text-base focus:ring-2 focus:ring-orange-400 focus:border-orange-400 focus:bg-white outline-none transition-all"
             />
           </div>
           <div>
@@ -254,79 +289,89 @@ const newOrder = () => {
               v-model="customerName"
               type="text"
               placeholder="e.g. John"
-              class="w-full h-12 px-4 rounded-xl border border-gray-300 bg-white text-gray-900 text-base focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+              class="w-full h-12 px-4 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 text-base focus:ring-2 focus:ring-orange-400 focus:border-orange-400 focus:bg-white outline-none transition-all"
             />
           </div>
         </div>
       </div>
 
-      <UButton
-        color="primary"
-        block
-        size="xl"
-        class="rounded-xl font-bold"
+      <button
         :disabled="!canSubmit"
-        :loading="submitting"
+        class="w-full bg-gradient-to-r from-green-500 to-emerald-500 disabled:from-gray-300 disabled:to-gray-300 text-white rounded-2xl px-6 py-4 font-bold text-base shadow-lg shadow-green-200 disabled:shadow-none active:scale-[0.98] transition-all"
         @click="placeOrder"
       >
-        Place Order — {{ formatPrice(cartTotal) }}
-      </UButton>
+        <span v-if="submitting">Placing Order...</span>
+        <span v-else>✅ Place Order — {{ formatPrice(cartTotal) }}</span>
+      </button>
     </div>
   </div>
 
   <!-- Menu -->
-  <div v-else class="min-h-screen pb-24">
+  <div v-else class="min-h-screen pb-24 bg-gray-50">
     <!-- Header -->
-    <div class="sticky top-0 bg-white z-20 border-b border-gray-100">
-      <div class="px-4 py-4">
+    <div class="sticky top-0 z-20">
+      <div class="bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 px-4 pt-5 pb-14">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-[#162456] rounded-xl flex items-center justify-center text-white font-bold text-sm">
+          <div class="w-11 h-11 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-white font-bold text-base">
             {{ tableData.table_number }}
           </div>
           <div>
-            <h1 class="font-bold text-gray-900 text-lg">{{ outlet?.name || 'Menu' }}</h1>
-            <p class="text-xs text-gray-500">Table {{ tableData.table_number }} · Dine-in</p>
+            <h1 class="font-bold text-white text-lg drop-shadow-sm">{{ outlet?.name || 'Menu' }}</h1>
+            <p class="text-white/80 text-xs">Table {{ tableData.table_number }} · Dine-in</p>
           </div>
         </div>
       </div>
 
-      <!-- Categories -->
-      <div class="flex gap-2 px-4 pb-3 overflow-x-auto no-scrollbar">
-        <button
-          v-for="cat in categories"
-          :key="cat"
-          :class="['px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all',
-            activeCategory === cat
-              ? 'bg-[#162456] text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          ]"
-          @click="activeCategory = cat"
-        >
-          {{ cat }}
-        </button>
+      <!-- Categories (overlapping header) -->
+      <div class="-mt-8 px-4">
+        <div class="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+          <button
+            v-for="cat in categories"
+            :key="cat"
+            :class="['px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap shadow-sm transition-all',
+              activeCategory === cat
+                ? 'bg-white text-orange-600 shadow-md'
+                : 'bg-white/70 text-gray-600 hover:bg-white'
+            ]"
+            @click="activeCategory = cat"
+          >
+            {{ cat }}
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Product Grid -->
-    <div class="px-4 py-4">
+    <div class="px-4 pt-4">
       <div v-if="filteredProducts.length === 0" class="text-center py-16">
-        <UIcon name="i-lucide-search-x" class="w-12 h-12 text-gray-300 mx-auto mb-4" />
-        <p class="text-gray-500">No items in this category.</p>
+        <div class="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <UIcon name="i-lucide-search-x" class="w-8 h-8 text-gray-300" />
+        </div>
+        <p class="text-gray-500 font-medium">No items in this category.</p>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
         <button
-          v-for="product in filteredProducts"
+          v-for="(product, index) in filteredProducts"
           :key="product.id"
-          class="bg-white rounded-2xl border border-gray-100 p-3 text-left hover:shadow-md transition-all active:scale-95"
+          class="bg-white rounded-2xl p-3 text-left shadow-sm border border-gray-100 hover:shadow-md active:scale-[0.97] transition-all"
           @click="addToCart(product)"
         >
-          <div class="w-full aspect-square bg-gray-100 rounded-xl flex items-center justify-center mb-3">
-            <img v-if="product.image_url" :src="product.image_url" class="w-full h-full object-cover rounded-xl" />
-            <UIcon v-else name="i-lucide-image" class="w-8 h-8 text-gray-300" />
+          <!-- Product Image / Colored Placeholder -->
+          <div
+            :class="['w-full aspect-[4/3] rounded-xl flex items-center justify-center mb-3 overflow-hidden',
+              !product.image_url ? cardColors[index % cardColors.length] : '']"
+          >
+            <img v-if="product.image_url" :src="product.image_url" class="w-full h-full object-cover" />
+            <span v-else class="text-3xl">{{ foodEmoji(product.category) }}</span>
           </div>
           <h3 class="font-semibold text-gray-900 text-sm leading-tight line-clamp-2">{{ product.name }}</h3>
-          <p class="text-primary font-bold text-sm mt-1">{{ formatPrice(product.price) }}</p>
+          <div class="flex items-center justify-between mt-2">
+            <span class="font-bold text-orange-600 text-sm">{{ formatPrice(product.price) }}</span>
+            <span class="w-7 h-7 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600">
+              <UIcon name="i-lucide-plus" class="w-4 h-4" />
+            </span>
+          </div>
         </button>
       </div>
     </div>
@@ -334,7 +379,7 @@ const newOrder = () => {
     <!-- Floating Cart Button -->
     <div v-if="cartCount > 0" class="fixed bottom-0 left-0 right-0 p-4 z-30">
       <button
-        class="w-full bg-[#162456] text-white rounded-2xl px-6 py-4 flex items-center justify-between shadow-xl shadow-gray-900/20 active:scale-[0.98] transition-transform"
+        class="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-2xl px-6 py-4 flex items-center justify-between shadow-xl shadow-green-900/20 active:scale-[0.98] transition-transform"
         @click="showCart = true"
       >
         <div class="flex items-center gap-3">
@@ -350,43 +395,45 @@ const newOrder = () => {
       <Transition name="slide-up">
         <div v-if="showCart" class="fixed inset-0 z-50">
           <!-- Backdrop -->
-          <div class="absolute inset-0 bg-black/40" @click="showCart = false" />
+          <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showCart = false" />
 
           <!-- Sheet -->
-          <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[80vh] flex flex-col">
+          <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[80vh] flex flex-col shadow-2xl">
             <!-- Handle -->
             <div class="flex justify-center py-3">
               <div class="w-10 h-1 bg-gray-300 rounded-full" />
             </div>
 
             <div class="px-5 pb-2 flex items-center justify-between">
-              <h3 class="text-lg font-bold text-gray-900">Your Cart</h3>
-              <button class="text-sm text-red-500 font-semibold" @click="cart = []; showCart = false">Clear All</button>
+              <h3 class="text-lg font-bold text-gray-900">🛒 Your Cart</h3>
+              <button class="text-sm text-red-500 font-semibold px-3 py-1 rounded-lg hover:bg-red-50 transition-colors" @click="cart = []; showCart = false">Clear All</button>
             </div>
 
-            <div class="flex-1 overflow-y-auto px-5 py-3 space-y-4">
-              <div v-for="item in cart" :key="item.id" class="flex items-center gap-3">
+            <div class="flex-1 overflow-y-auto px-5 py-3 space-y-3">
+              <div v-for="item in cart" :key="item.id" class="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+                <div class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center text-lg shrink-0">
+                  {{ foodEmoji(item.category) }}
+                </div>
                 <div class="flex-1 min-w-0">
                   <p class="font-medium text-gray-900 text-sm truncate">{{ item.name }}</p>
-                  <p class="text-sm text-gray-500">{{ formatPrice(item.price) }}</p>
+                  <p class="text-xs text-gray-400">{{ formatPrice(item.price) }} each</p>
                 </div>
-                <div class="flex items-center gap-2">
-                  <button class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 font-bold" @click="updateCartQty(item, -1)">−</button>
-                  <span class="w-6 text-center font-semibold text-sm">{{ item.quantity }}</span>
-                  <button class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 font-bold" @click="updateCartQty(item, 1)">+</button>
+                <div class="flex items-center gap-1.5">
+                  <button class="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-600 font-bold text-sm shadow-sm" @click="updateCartQty(item, -1)">−</button>
+                  <span class="w-7 text-center font-bold text-sm text-gray-900">{{ item.quantity }}</span>
+                  <button class="w-8 h-8 rounded-lg bg-orange-500 text-white flex items-center justify-center font-bold text-sm shadow-sm" @click="updateCartQty(item, 1)">+</button>
                 </div>
-                <span class="font-semibold text-gray-900 text-sm w-20 text-right">{{ formatPrice(item.price * item.quantity) }}</span>
               </div>
             </div>
 
             <div class="border-t border-gray-100 px-5 py-4">
               <div class="flex justify-between mb-4">
                 <span class="font-bold text-gray-900">Total</span>
-                <span class="text-xl font-bold text-gray-900">{{ formatPrice(cartTotal) }}</span>
+                <span class="text-xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">{{ formatPrice(cartTotal) }}</span>
               </div>
-              <UButton color="primary" block size="xl" class="rounded-xl font-bold" @click="openCheckout">
+              <button class="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-2xl px-6 py-4 font-bold text-base shadow-lg shadow-green-200 active:scale-[0.98] transition-transform" @click="openCheckout">
                 Checkout — {{ formatPrice(cartTotal) }}
-              </UButton>
+              </button>
             </div>
           </div>
         </div>
@@ -394,6 +441,8 @@ const newOrder = () => {
     </Teleport>
   </div>
 </template>
+
+
 
 <style scoped>
 .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -405,3 +454,4 @@ const newOrder = () => {
 .slide-up-enter-from .absolute.bottom-0,
 .slide-up-leave-to .absolute.bottom-0 { transform: translateY(100%); }
 </style>
+

@@ -7,20 +7,23 @@ const reportsOpen = ref(false)
 const userMenuOpen = ref(false)
 const { loadCurrency } = useCurrency()
 
-onMounted(async () => {
-  if (user.value) {
-    const { data } = await client
-      .from('profiles')
-      .select('*, outlets(*)')
-      .eq('id', user.value.id)
-      .single()
-    profile.value = data
-    outlet.value = data?.outlets || null
-    if (outlet.value?.id) {
-      await loadCurrency(outlet.value.id)
-    }
+const loadProfile = async () => {
+  if (!user.value?.id) return
+  const { data } = await client
+    .from('profiles')
+    .select('*, outlets(*)')
+    .eq('id', user.value.id)
+    .single()
+  profile.value = data
+  outlet.value = data?.outlets || null
+  if (outlet.value?.id) {
+    await loadCurrency(outlet.value.id)
   }
-})
+}
+
+watch(user, (val) => {
+  if (val?.id) loadProfile()
+}, { immediate: true })
 
 const handleLogout = async () => {
   // Clear onboarding cache

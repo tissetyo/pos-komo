@@ -44,6 +44,7 @@ const handleLogout = async () => {
           <UIcon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
         </div>
       </div>
+      <div class="flex items-center gap-4">
         <NuxtLink to="/kitchen" class="text-white/70 hover:text-white transition-colors text-xs font-medium flex items-center gap-1">
           <UIcon name="i-lucide-chef-hat" class="w-4 h-4" />
           Kitchen
@@ -58,6 +59,7 @@ const handleLogout = async () => {
             {{ (user?.email || 'U').charAt(0).toUpperCase() }}
           </div>
         </button>
+      </div>
       </div>
     </header>
 

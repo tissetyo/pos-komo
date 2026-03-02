@@ -781,7 +781,7 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
           </button>
         </div>
       </div>
-        </div>
+      </template>
       </template>
 
       <!-- QR ORDER TIMELINE / DETAILS -->

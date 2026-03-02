@@ -125,7 +125,8 @@ const placeOrder = async () => {
   submitting.value = true
 
   try {
-    // Generate receipt number
+    // Generate UUID and receipt number
+    const orderId = crypto.randomUUID()
     const receiptNumber = `QR-${Date.now().toString(36).toUpperCase()}`
 
     // Compute totals
@@ -147,25 +148,22 @@ const placeOrder = async () => {
 
     if (existingCustomer) {
       customerId = existingCustomer.id
-      // Update name if a name was provided and it's different/new
       if (customerName.value) {
         await (client as any).from('customers').update({ name: customerName.value }).eq('id', customerId)
       }
     } else {
-      // Create new customer
       const { data: newCustomer } = await (client as any).from('customers').insert({
         name: customerName.value || `QR Customer (${customerPhone.value})`,
         phone: customerPhone.value,
         outlet_id: tableData.value.outlet_id
       }).select('id').single()
 
-      if (newCustomer) {
-        customerId = newCustomer.id
-      }
+      if (newCustomer) customerId = newCustomer.id
     }
 
-    // Create order — cast as any to bypass typed client RLS issues
-    const { data: order, error: orderErr } = await (client as any).from('orders').insert({
+    // Create order WITHOUT .select() to prevent RLS read violation for anonymous users
+    const { error: orderErr } = await (client as any).from('orders').insert({
+      id: orderId,
       receipt_number: receiptNumber,
       outlet_id: tableData.value.outlet_id,
       table_id: tableData.value.id,
@@ -180,13 +178,13 @@ const placeOrder = async () => {
       payment_status: 'pending',
       order_status: 'new',
       order_type: 'dine-in'
-    }).select().single()
+    })
 
     if (orderErr) throw orderErr
 
-    // Create order items
+    // Create order items using our generated orderId
     const items = cart.value.map(c => ({
-      order_id: order.id,
+      order_id: orderId,
       product_id: c.id,
       quantity: c.quantity,
       unit_price: c.price,

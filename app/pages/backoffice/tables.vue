@@ -139,7 +139,7 @@ const printQr = () => {
               class="w-12 h-12 rounded-xl flex items-center justify-center"
               :style="{ background: table.is_active ? (table.color || '#162456') : '#E5E7EB' }"
             >
-              <UIcon name="i-lucide-grid-2x2" :class="['w-6 h-6', table.is_active ? 'text-white' : 'text-gray-400']" />
+              <UIcon name="i-lucide-armchair" :class="['w-6 h-6', table.is_active ? 'text-white' : 'text-gray-400']" />
             </div>
             <div>
               <h4 class="font-semibold text-gray-900">{{ table.table_number }}</h4>

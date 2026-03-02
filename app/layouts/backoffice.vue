@@ -30,7 +30,7 @@ const navItems = [
   { label: 'Products', icon: 'i-lucide-package', to: '/backoffice/products' },
   { label: 'Customers', icon: 'i-lucide-users', to: '/backoffice/customers' },
   { label: 'Employees', icon: 'i-lucide-user-cog', to: '/backoffice/employees' },
-  { label: 'Tables', icon: 'i-lucide-grid-2x2', to: '/backoffice/tables' },
+  { label: 'Tables', icon: 'i-lucide-armchair', to: '/backoffice/tables' },
   { label: 'Payments', icon: 'i-lucide-credit-card', to: '/backoffice/payments' },
   { label: 'Settings', icon: 'i-lucide-settings', to: '/backoffice/settings' },
 ]

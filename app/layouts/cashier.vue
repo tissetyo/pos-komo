@@ -60,7 +60,6 @@ const handleLogout = async () => {
           </div>
         </button>
       </div>
-      </div>
     </header>
 
     <!-- Main Content -->

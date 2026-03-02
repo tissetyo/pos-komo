@@ -3,6 +3,7 @@ definePageMeta({ layout: 'cashier' })
 
 const { client, outletId, userId, profileReady } = useUserProfile()
 const { formatPrice, symbol: currSymbol, loadCurrency } = useCurrency()
+const toast = useToast()
 
 // Data from Supabase
 const products = ref<any[]>([])
@@ -74,6 +75,96 @@ const isProcessing = ref(false)
 const showSuccessModal = ref(false)
 const completedOrder = ref<any>(null)
 
+// Tabs & QR Orders State
+const activeTab = ref<string>('walk-in')
+const qrOrders = ref<any[]>([])
+const updatingQrOrder = ref(false)
+let orderSubscription: any = null
+
+const loadQrOrders = async () => {
+  if (!outletId.value) return
+  const { data } = await client
+    .from('orders')
+    .select('*, tables(table_number, color), order_items(*, product:products(name, price, image_url))')
+    .eq('outlet_id', outletId.value)
+    .eq('source', 'qr')
+    .eq('payment_status', 'pending')
+    .order('created_at', { ascending: true })
+  qrOrders.value = data || []
+  
+  if (activeTab.value !== 'walk-in' && !qrOrders.value.find(o => o.id === activeTab.value)) {
+    activeTab.value = 'walk-in'
+  }
+}
+
+const subscribeToOrders = () => {
+  if (!outletId.value || orderSubscription) return
+  
+  orderSubscription = client
+    .channel('public:orders')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `outlet_id=eq.${outletId.value}` }, (payload) => {
+      if (payload.new.source === 'qr' && payload.new.payment_status === 'pending') {
+        loadQrOrders()
+        toast.add({
+          title: 'New QR Order!',
+          description: `A new order has been placed.`,
+          color: 'orange',
+          icon: 'i-lucide-bell-ring'
+        })
+      }
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `outlet_id=eq.${outletId.value}` }, (payload) => {
+      loadQrOrders()
+    })
+    .subscribe()
+}
+
+onUnmounted(() => {
+  if (orderSubscription) client.removeChannel(orderSubscription)
+})
+
+const confirmQrOrder = async (orderId: string) => {
+  updatingQrOrder.value = true
+  await client.from('orders').update({ order_status: 'processing' }).eq('id', orderId)
+  await loadQrOrders()
+  toast.add({ title: 'Order confirmed and sent to kitchen', color: 'green', icon: 'i-lucide-check' })
+  updatingQrOrder.value = false
+}
+
+const checkoutQrOrder = async (orderId: string) => {
+  updatingQrOrder.value = true
+  await client.from('orders').update({ order_status: 'completed', payment_status: 'paid' }).eq('id', orderId)
+  await loadQrOrders()
+  toast.add({ title: 'Payment confirmed. Tab closed.', color: 'green', icon: 'i-lucide-check' })
+  updatingQrOrder.value = false
+}
+
+const printQrReceipt = (order: any) => {
+  const w = window.open('', '_blank')
+  if (!w) return
+  let itemsHtml = order.order_items.map((i: any) => `
+    <tr>
+      <td style="padding:4px 0">${i.quantity}x ${i.product?.name || 'Item'}</td>
+      <td style="text-align:right;padding:4px 0">${formatPrice(i.total_price)}</td>
+    </tr>
+  `).join('')
+
+  w.document.write(`
+    <html><head><title>Receipt ${order.receipt_number}</title>
+    <style>body{font-family:system-ui,monospace;width:300px;margin:0 auto;padding:20px;color:#000} table{width:100%;font-size:14px} td{border-bottom:1px dashed #ccc}</style></head>
+    <body>
+    <h2 style="text-align:center;margin-bottom:5px">Table ${order.tables?.table_number || '?'}</h2>
+    <p style="text-align:center;margin-top:0;font-size:12px;color:#666">${order.receipt_number}<br>${new Date(order.created_at).toLocaleString()}</p>
+    <hr style="border-top:1px dashed #000;border-bottom:0">
+    <table cellspacing="0">${itemsHtml}</table>
+    <h3 style="text-align:right;margin-top:15px">Total: ${formatPrice(order.total)}</h3>
+    <p style="text-align:center;font-size:12px;margin-top:30px">Thank you!</p>
+    </body></html>
+  `)
+  w.document.close()
+  setTimeout(() => { w.print(); w.close(); }, 500)
+}
+
 // Load products from Supabase
 const loadProducts = async () => {
   if (!outletId.value) { loading.value = false; return }
@@ -121,7 +212,13 @@ const loadProducts = async () => {
   }
 }
 
-watch(profileReady, (ready) => { if (ready) loadProducts() })
+watch(profileReady, (ready) => { 
+  if (ready) {
+    loadProducts()
+    loadQrOrders()
+    subscribeToOrders()
+  }
+}, { immediate: true })
 
 const filteredProducts = computed(() => {
   return products.value.filter(p => {
@@ -313,10 +410,39 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
 </script>
 
 <template>
-  <div class="flex h-full w-full">
+  <div class="flex flex-col h-full w-full bg-gray-50/50">
 
-    <!-- CHECKOUT VIEW -->
-    <div v-if="showCheckout" class="flex h-full w-full">
+    <!-- TOP TABS -->
+    <div class="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-2 shrink-0 overflow-x-auto no-scrollbar shadow-sm z-10">
+      <button 
+        @click="activeTab = 'walk-in'"
+        :class="['h-10 px-6 rounded-xl font-bold text-sm transition-all flex items-center gap-2', activeTab === 'walk-in' ? 'bg-[#162456] text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200']"
+      >
+        <UIcon name="i-lucide-user-plus" class="w-4 h-4" />
+        Walk-in Order
+      </button>
+
+      <div v-if="qrOrders.length > 0" class="w-px h-6 bg-gray-200 mx-2"></div>
+
+      <button
+        v-for="order in qrOrders" :key="order.id"
+        @click="activeTab = order.id"
+        :class="['h-10 px-5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 whitespace-nowrap', activeTab === order.id ? 'bg-[#EA580C] text-white shadow-md' : 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100']"
+      >
+        <div class="w-6 h-6 rounded-md flex items-center justify-center bg-white/20">
+          <UIcon name="i-lucide-armchair" class="w-3.5 h-3.5" />
+        </div>
+        Table {{ order.tables?.table_number || '?' }}
+        <span v-if="order.order_status === 'new'" class="w-2 h-2 rounded-full bg-red-500 animate-pulse ml-1"></span>
+      </button>
+    </div>
+
+    <!-- CONTENT AREA -->
+    <div class="flex flex-1 w-full overflow-hidden">
+      <!-- WALK-IN VIEWS -->
+      <template v-if="activeTab === 'walk-in'">
+        <!-- CHECKOUT VIEW -->
+        <div v-if="showCheckout" class="flex w-full h-full">
       <!-- Left: Order Summary -->
       <div class="w-[380px] bg-white border-r border-gray-200 flex flex-col shrink-0">
         <div class="px-5 py-4 border-b border-gray-200 flex items-center gap-3">
@@ -655,7 +781,126 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
           </button>
         </div>
       </div>
-    </template>
+        </div>
+      </template>
+
+      <!-- QR ORDER TIMELINE / DETAILS -->
+      <div v-else class="flex w-full h-full bg-white">
+        <!-- Find active order -->
+        <template v-for="order in qrOrders.filter(o => o.id === activeTab)" :key="order.id">
+          <!-- Left/Center: QR Order Details -->
+          <div class="flex-1 overflow-y-auto p-8 custom-scrollbar bg-gray-50">
+            <div class="max-w-3xl mx-auto space-y-6">
+              <!-- Header -->
+              <div class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                  <div class="w-16 h-16 rounded-2xl flex items-center justify-center shadow-inner" :style="{ background: order.tables?.color || '#162456' }">
+                    <UIcon name="i-lucide-armchair" class="w-8 h-8 text-white" />
+                  </div>
+                  <div>
+                    <h2 class="text-2xl font-bold text-gray-900">Table {{ order.tables?.table_number }}</h2>
+                    <p class="text-sm text-gray-500">{{ order.receipt_number }} • {{ new Date(order.created_at).toLocaleTimeString() }}</p>
+                  </div>
+                </div>
+                <!-- Status Badge -->
+                <div :class="['px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-wider', 
+                  order.order_status === 'new' ? 'bg-red-50 text-red-600 border border-red-200 animate-pulse' : 'bg-amber-50 text-amber-600 border border-amber-200']">
+                  {{ order.order_status }}
+                </div>
+              </div>
+
+              <!-- Customer Info -->
+              <div class="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm flex items-center gap-4">
+                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                  <UIcon name="i-lucide-user" class="w-6 h-6 text-gray-500" />
+                </div>
+                <div>
+                  <h3 class="font-bold text-gray-900 text-lg">{{ order.customer_name || 'Guest Customer' }}</h3>
+                  <p class="text-gray-500 flex items-center gap-1.5 mt-0.5">
+                    <UIcon name="i-lucide-phone" class="w-3.5 h-3.5" />
+                    {{ order.customer_phone }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- Order Items List -->
+              <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                  <h3 class="font-bold text-gray-900">Order Items</h3>
+                  <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">{{ order.order_items?.length }} Items</span>
+                </div>
+                <div class="divide-y divide-gray-100">
+                  <div v-for="item in order.order_items" :key="item.id" class="p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors">
+                    <div class="w-12 h-12 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0">
+                      <img v-if="item.product?.image_url" :src="item.product.image_url" class="w-full h-full object-cover" />
+                      <div v-else class="w-full h-full flex items-center justify-center"><UIcon name="i-lucide-utensils" class="w-5 h-5 text-gray-400" /></div>
+                    </div>
+                    <div class="flex-1">
+                      <h4 class="font-bold text-gray-900">{{ item.product?.name || 'Unknown Item' }}</h4>
+                      <div class="flex items-center gap-2 mt-1">
+                        <span class="inline-flex items-center bg-gray-100 text-gray-600 text-[11px] font-bold px-2 py-0.5 rounded-md">×{{ item.quantity }}</span>
+                        <span class="text-xs text-gray-500">@ {{ formatPrice(item.unit_price) }}</span>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <span class="font-bold text-gray-900">{{ formatPrice(item.total_price) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Sidebar: Action Panel -->
+          <div class="w-80 lg:w-[400px] bg-white border-l border-gray-200 flex flex-col p-6 shrink-0 relative">
+            <div v-if="updatingQrOrder" class="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
+              <UIcon name="i-lucide-loader-2" class="w-8 h-8 animate-spin text-[#162456] mb-2" />
+              <p class="font-bold text-gray-900">Processing...</p>
+            </div>
+
+            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-8">Order Actions</h3>
+
+            <div class="bg-gray-50 rounded-2xl p-5 space-y-3 mb-8">
+              <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span class="font-semibold text-gray-900">{{ formatPrice(order.subtotal) }}</span></div>
+              <div class="flex justify-between text-sm"><span class="text-gray-500">Tax</span><span class="font-semibold text-gray-900">{{ formatPrice(order.tax) }}</span></div>
+              <div class="border-t border-dashed border-gray-300 pt-3 mt-1 flex justify-between items-center">
+                <span class="font-bold text-gray-900 text-lg">Total</span>
+                <span class="font-black text-3xl text-gray-900">{{ formatPrice(order.total) }}</span>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="space-y-3 flex-1 flex flex-col justify-end">
+              <button 
+                v-if="order.order_status === 'new'"
+                @click="confirmQrOrder(order.id)"
+                class="w-full py-4 rounded-xl border-2 border-[#162456] text-[#162456] font-bold text-lg hover:bg-[#162456] hover:text-white transition-all flex items-center justify-center gap-2"
+              >
+                <UIcon name="i-lucide-check-circle-2" class="w-5 h-5" />
+                Confirm & Send to Kitchen
+              </button>
+
+              <button 
+                @click="printQrReceipt(order)"
+                class="w-full py-3.5 rounded-xl border border-gray-300 text-gray-700 font-bold hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+              >
+                <UIcon name="i-lucide-printer" class="w-5 h-5 text-gray-500" />
+                Print Receipt
+              </button>
+
+              <button 
+                v-if="order.order_status !== 'new'"
+                @click="checkoutQrOrder(order.id)"
+                class="w-full mt-4 py-5 rounded-xl bg-green-600 text-white font-bold text-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-green-600/20"
+              >
+                <UIcon name="i-lucide-badge-dollar-sign" class="w-6 h-6" />
+                Confirm Payment & Close
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
 
     <!-- Variation Picker Modal (Redesigned) -->
     <UModal v-model:open="showVariationPicker">

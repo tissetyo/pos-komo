@@ -143,6 +143,40 @@ const saveSettings = async () => {
 const connectIntegration = (integration: any) => {
   integration.connected = !integration.connected
 }
+
+const testingConnection = ref<string | null>(null)
+const toast = useToast()
+
+const testConnection = async (integration: any) => {
+  if (!integration.apiKey) {
+    toast.add({ title: 'Missing API Key', description: 'Please enter an API key first.', color: 'error' })
+    return
+  }
+
+  testingConnection.value = integration.id
+  try {
+    const res = await $fetch('/api/payment/test', {
+      method: 'POST',
+      body: { provider: integration.id, apiKey: integration.apiKey }
+    })
+    
+    toast.add({
+      title: 'Success!',
+      description: (res as any).message,
+      color: 'success',
+      icon: 'i-lucide-check-circle'
+    })
+  } catch (err: any) {
+    toast.add({
+      title: 'Connection Failed',
+      description: err.data?.message || err.message,
+      color: 'error',
+      icon: 'i-lucide-alert-circle'
+    })
+  } finally {
+    testingConnection.value = null
+  }
+}
 </script>
 
 <template>
@@ -309,8 +343,12 @@ const connectIntegration = (integration: any) => {
                   >
                     {{ integration.connected ? 'Disconnect' : 'Connect' }}
                   </button>
-                  <button v-if="integration.connected" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-200 text-gray-600 hover:bg-gray-300">
-                    Test Connection
+                  <button v-if="integration.connected" 
+                    @click="testConnection(integration)"
+                    :disabled="testingConnection === integration.id"
+                    class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-200 text-gray-600 hover:bg-gray-300 disabled:opacity-50 flex items-center gap-2">
+                    <UIcon v-if="testingConnection === integration.id" name="i-lucide-loader-2" class="w-4 h-4 animate-spin" />
+                    {{ testingConnection === integration.id ? 'Testing...' : 'Test Connection' }}
                   </button>
                 </div>
               </div>

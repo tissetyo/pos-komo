@@ -74,6 +74,7 @@ const isProcessing = ref(false)
 // Order Complete
 const showSuccessModal = ref(false)
 const completedOrder = ref<any>(null)
+const checkoutTabId = ref<string | null>(null)
 
 // Order Management Drawer
 const showOrderDrawer = ref(false)
@@ -196,19 +197,28 @@ const submitPin = () => {
 }
 
 const checkoutQrOrder = (orderId: string) => {
-  requestPinValidation(async () => {
-    updatingQrOrder.value = true
-    try {
-      const { error } = await (client as any).from('orders').update({ order_status: 'completed', payment_status: 'paid' }).eq('id', orderId)
-      if (error) throw error
-      await loadQrOrders()
-      toast.add({ title: 'Payment confirmed. Tab closed.', color: 'success', icon: 'i-lucide-check' })
-    } catch (err: any) {
-      toast.add({ title: 'Failed to complete payment', description: err.message, color: 'error' })
-    } finally {
-      updatingQrOrder.value = false
-    }
-  })
+  const order = qrOrders.value.find(o => o.id === orderId)
+  if (!order) return
+  
+  // Populate cart with the order's items so checkout modal works correctly
+  orderItems.value = order.order_items.map((i: any) => ({
+    id: i.product_id,
+    name: i.product?.name || 'Item',
+    price: i.unit_price,
+    finalPrice: i.unit_price,
+    quantity: i.quantity,
+    image: null,
+    variationSnapshot: i.variation_snapshot || {},
+    variationLabel: ''
+  }))
+  
+  orderType.value = order.order_type || 'dine-in'
+  selectedTableId.value = order.table_id
+  checkoutTabId.value = orderId
+  
+  paymentMethod.value = 'cash'
+  cashReceived.value = ''
+  showCheckout.value = true
 }
 
 const printQrReceipt = (order: any) => {
@@ -430,6 +440,7 @@ const clearOrder = () => {
 
 const openCheckout = () => {
   if (orderItems.value.length === 0) return
+  checkoutTabId.value = null // This is a new order
   createOrder()
 }
 
@@ -521,40 +532,64 @@ const executePayment = async () => {
   isProcessing.value = true
 
   try {
-    const receiptNumber = 'TRX-' + Date.now().toString().slice(-8)
+    let receiptNumber = 'TRX-' + Date.now().toString().slice(-8)
+    let finalOrderData = null
 
-    const { data: order, error: orderErr } = await client
-      .from('orders')
-      .insert({
-        receipt_number: receiptNumber,
-        outlet_id: outletId.value,
-        cashier_id: userId.value,
-        subtotal: subtotal.value,
-        tax: tax.value,
-        discount: 0,
-        total: total.value,
-        payment_method: paymentMethod.value,
-        payment_status: 'paid',
-        order_status: 'completed',
-        order_type: orderType.value
-      } as any)
-      .select()
-      .single()
+    if (checkoutTabId.value) {
+      // We are closing an existing tab
+      const { data: order, error: orderErr } = await client
+        .from('orders')
+        .update({
+          payment_method: paymentMethod.value,
+          payment_status: 'paid',
+          order_status: 'completed',
+        } as any)
+        .eq('id', checkoutTabId.value)
+        .select()
+        .single()
 
-    if (orderErr) throw orderErr
+      if (orderErr) throw orderErr
+      receiptNumber = (order as any).receipt_number
+      finalOrderData = order
+      await loadQrOrders()
 
-    const items = orderItems.value.map(item => ({
-      order_id: (order as any).id,
-      product_id: item.id,
-      quantity: item.quantity,
-      unit_price: item.finalPrice,
-      total_price: item.finalPrice * item.quantity,
-      variation_snapshot: Object.keys(item.variationSnapshot).length > 0 ? item.variationSnapshot : null,
-      notes: orderNote.value || null
-    }))
+    } else {
+      // This path is technically bypassed now since openCheckout() calls createOrder() instead
+      // but we leave it for potential direct checkout flows.
+      const { data: order, error: orderErr } = await client
+        .from('orders')
+        .insert({
+          receipt_number: receiptNumber,
+          outlet_id: outletId.value,
+          cashier_id: userId.value,
+          subtotal: subtotal.value,
+          tax: tax.value,
+          discount: 0,
+          total: total.value,
+          payment_method: paymentMethod.value,
+          payment_status: 'paid',
+          order_status: 'completed',
+          order_type: orderType.value
+        } as any)
+        .select()
+        .single()
 
-    const { error: itemsErr } = await client.from('order_items').insert(items as any)
-    if (itemsErr) throw itemsErr
+      if (orderErr) throw orderErr
+      
+      const items = orderItems.value.map(item => ({
+        order_id: (order as any).id,
+        product_id: item.id,
+        quantity: item.quantity,
+        unit_price: item.finalPrice,
+        total_price: item.finalPrice * item.quantity,
+        variation_snapshot: Object.keys(item.variationSnapshot).length > 0 ? item.variationSnapshot : null,
+        notes: orderNote.value || null
+      }))
+
+      const { error: itemsErr } = await client.from('order_items').insert(items as any)
+      if (itemsErr) throw itemsErr
+      finalOrderData = order
+    }
 
     completedOrder.value = {
       receiptNumber,
@@ -640,11 +675,11 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
       <!-- Left: Order Summary -->
       <div class="w-[380px] bg-white border-r border-gray-200 flex flex-col shrink-0">
         <div class="px-5 py-4 border-b border-gray-200 flex items-center gap-3">
-          <button @click="showCheckout = false" class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
+          <button @click="showCheckout = false; checkoutTabId = null; startNewOrder()" class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
             <UIcon name="i-lucide-arrow-left" class="w-4 h-4 text-gray-600" />
           </button>
           <div>
-            <h2 class="font-bold text-lg text-gray-900">Order #{{ Date.now().toString().slice(-4) }}</h2>
+            <h2 class="font-bold text-lg text-gray-900">Order {{ checkoutTabId ? 'Payment' : '#' + Date.now().toString().slice(-4) }}</h2>
             <p class="text-xs text-gray-500">{{ new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' }) }}</p>
           </div>
           <span class="ml-auto bg-[#162456] text-white text-xs font-bold px-3 py-1 rounded-lg uppercase">

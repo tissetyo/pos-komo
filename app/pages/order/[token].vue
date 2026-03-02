@@ -20,6 +20,7 @@ const loading = ref(true)
 const submitting = ref(false)
 const errorMsg = ref('')
 const searchQuery = ref('')
+const stripeEnabled = ref(false)
 
 // Checkout form
 const customerName = ref('')
@@ -61,6 +62,10 @@ onMounted(async () => {
 
   const catNames = [...new Set(loadedProducts.map((p: any) => p.category))] as string[]
   categories.value = ['All', ...catNames]
+
+  // Check if Stripe is connected
+  const integrations = tbl.outlets?.integrations || {}
+  stripeEnabled.value = integrations.stripe?.connected === true
 
   loading.value = false
 })
@@ -128,6 +133,7 @@ const placeOrder = async () => {
     // Generate UUID and receipt number
     const orderId = crypto.randomUUID()
     const receiptNumber = `QR-${Date.now().toString(36).toUpperCase()}`
+    completedOrderNumber.value = receiptNumber
 
     // Compute totals
     const subtotal = cartTotal.value
@@ -193,7 +199,6 @@ const placeOrder = async () => {
 
     await (client as any).from('order_items').insert(items)
 
-    completedOrderNumber.value = receiptNumber
     showCheckout.value = false
     showSuccess.value = true
     cart.value = []
@@ -209,6 +214,35 @@ const newOrder = () => {
   customerName.value = ''
   customerPhone.value = ''
   activeCategory.value = 'All'
+}
+
+const paying = ref(false)
+const payOnline = async () => {
+  if (!completedOrderNumber.value) return
+  paying.value = true
+  
+  try {
+    const { data: order } = await (client as any)
+      .from('orders')
+      .select('id')
+      .eq('receipt_number', completedOrderNumber.value)
+      .single()
+      
+    if (!order) throw new Error('Order not found')
+    
+    const res = await $fetch('/api/payment/checkout', {
+      method: 'POST',
+      body: { orderId: order.id }
+    })
+    
+    if ((res as any).url) {
+      window.location.href = (res as any).url
+    }
+  } catch (err: any) {
+    alert(err.data?.message || err.message)
+  } finally {
+    paying.value = false
+  }
 }
 
 // UI helpers
@@ -287,8 +321,21 @@ const categoryColors = [
         <p class="text-amber-800 font-semibold">📍 Table {{ tableData.table_number }}</p>
         <p class="text-amber-600 text-sm mt-1">Please wait while we prepare your food.</p>
       </div>
-      <button class="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-2xl px-6 py-4 font-bold text-base shadow-lg shadow-orange-200 active:scale-[0.98] transition-transform" @click="newOrder">
-        🍽️ Order More
+      
+      <div v-if="stripeEnabled" class="space-y-3 mb-6">
+        <button 
+          @click="payOnline" 
+          :disabled="paying"
+          class="w-full bg-[#635BFF] text-white rounded-2xl px-6 py-4 font-bold text-base shadow-lg shadow-indigo-200 disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
+          <UIcon v-if="paying" name="i-lucide-loader-2" class="w-5 h-5 animate-spin" />
+          <UIcon v-else name="i-lucide-credit-card" class="w-5 h-5" />
+          {{ paying ? 'Processing...' : 'Pay Online Now' }}
+        </button>
+        <p class="text-xs text-gray-500">or pay with cash at the counter later</p>
+      </div>
+
+      <button :class="['w-full rounded-2xl px-6 py-4 font-bold text-base transition-transform', stripeEnabled ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-200 active:scale-[0.98]']" @click="newOrder">
+        🍽️ Order {{ stripeEnabled ? 'Something Else' : 'More' }}
       </button>
     </div>
   </div>

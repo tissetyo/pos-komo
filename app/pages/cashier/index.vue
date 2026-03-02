@@ -1,7 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'cashier' })
 
-const { client, outletId, userId, profileReady } = useUserProfile()
+const { client, outletId, userId, profileReady, profile } = useUserProfile()
 const { formatPrice, symbol: currSymbol, loadCurrency } = useCurrency()
 const toast = useToast()
 
@@ -108,7 +108,7 @@ const subscribeToOrders = () => {
         toast.add({
           title: 'New QR Order!',
           description: `A new order has been placed.`,
-          color: 'orange',
+          color: 'warning',
           icon: 'i-lucide-bell-ring'
         })
       }
@@ -125,18 +125,71 @@ onUnmounted(() => {
 
 const confirmQrOrder = async (orderId: string) => {
   updatingQrOrder.value = true
-  await client.from('orders').update({ order_status: 'processing' }).eq('id', orderId)
-  await loadQrOrders()
-  toast.add({ title: 'Order confirmed and sent to kitchen', color: 'green', icon: 'i-lucide-check' })
-  updatingQrOrder.value = false
+  try {
+    const { error } = await (client as any).from('orders').update({ order_status: 'processing' }).eq('id', orderId)
+    if (error) throw error
+    await loadQrOrders()
+    toast.add({ title: 'Order confirmed and sent to kitchen', color: 'success', icon: 'i-lucide-check' })
+  } catch (err: any) {
+    toast.add({ title: 'Failed to confirm order', description: err.message, color: 'error' })
+  } finally {
+    updatingQrOrder.value = false
+  }
 }
 
-const checkoutQrOrder = async (orderId: string) => {
-  updatingQrOrder.value = true
-  await client.from('orders').update({ order_status: 'completed', payment_status: 'paid' }).eq('id', orderId)
-  await loadQrOrders()
-  toast.add({ title: 'Payment confirmed. Tab closed.', color: 'green', icon: 'i-lucide-check' })
-  updatingQrOrder.value = false
+// PIN Validation Flow
+const requiredPinAction = ref<(() => void) | null>(null)
+const showPinModal = ref(false)
+const pinInput = ref('')
+const pinError = ref(false)
+
+const requestPinValidation = (action: () => void) => {
+  if (!profile.value?.pin) {
+    // If no PIN is configured, just execute
+    action()
+    return
+  }
+  requiredPinAction.value = action
+  pinInput.value = ''
+  pinError.value = false
+  showPinModal.value = true
+}
+
+const handlePinNumpad = (key: string) => {
+  if (key === 'backspace') {
+    pinInput.value = pinInput.value.slice(0, -1)
+  } else if (pinInput.value.length < 6) {
+    pinInput.value += key
+  }
+  pinError.value = false
+}
+
+const submitPin = () => {
+  if (pinInput.value === profile.value?.pin) {
+    showPinModal.value = false
+    if (requiredPinAction.value) requiredPinAction.value()
+    requiredPinAction.value = null
+  } else {
+    pinError.value = true
+    pinInput.value = ''
+    toast.add({ title: 'Invalid PIN', description: 'Please try again', color: 'error' })
+  }
+}
+
+const checkoutQrOrder = (orderId: string) => {
+  requestPinValidation(async () => {
+    updatingQrOrder.value = true
+    try {
+      const { error } = await (client as any).from('orders').update({ order_status: 'completed', payment_status: 'paid' }).eq('id', orderId)
+      if (error) throw error
+      await loadQrOrders()
+      toast.add({ title: 'Payment confirmed. Tab closed.', color: 'success', icon: 'i-lucide-check' })
+    } catch (err: any) {
+      toast.add({ title: 'Failed to complete payment', description: err.message, color: 'error' })
+    } finally {
+      updatingQrOrder.value = false
+    }
+  })
 }
 
 const printQrReceipt = (order: any) => {
@@ -189,7 +242,7 @@ const loadProducts = async () => {
         .order('sort_order')
       ;(vars || []).forEach((v: any) => {
         if (!varMap[v.product_id]) varMap[v.product_id] = []
-        varMap[v.product_id].push(v)
+        varMap[v.product_id]!.push(v)
       })
     }
 
@@ -339,7 +392,7 @@ const quickAmounts = computed(() => {
   ]
 })
 
-const processPayment = async () => {
+const executePayment = async () => {
   if (!userId.value || !outletId.value || !canPay.value) return
   isProcessing.value = true
 
@@ -396,6 +449,10 @@ const processPayment = async () => {
   } finally {
     isProcessing.value = false
   }
+}
+
+const processPayment = () => {
+  requestPinValidation(executePayment)
 }
 
 const startNewOrder = () => {
@@ -1016,6 +1073,43 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
 
           <button @click="startNewOrder" class="w-full py-4 rounded-xl bg-[#162456] text-white font-bold text-lg hover:bg-[#1d2f6b] transition-colors">
             New Order
+          </button>
+        </div>
+      </template>
+    </UModal>
+
+    <!-- PIN Entry Modal -->
+    <UModal v-model:open="showPinModal" prevent-close>
+      <template #content>
+        <div class="p-8 bg-white max-w-sm mx-auto flex flex-col items-center">
+          <div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+            <UIcon name="i-lucide-lock" class="w-8 h-8 text-blue-600" />
+          </div>
+          <h3 class="text-xl font-bold text-gray-900 mb-2">Enter Cashier PIN</h3>
+          <p class="text-sm text-gray-500 text-center mb-6">Authorize this manual payment by entering your PIN.</p>
+          
+          <div class="flex gap-3 mb-8">
+            <div v-for="i in 6" :key="i" :class="['w-4 h-4 rounded-full border-2 transition-all', pinInput.length >= i ? 'bg-blue-600 border-blue-600' : 'bg-transparent border-gray-300', pinError ? 'border-red-500 bg-red-500' : '']"></div>
+          </div>
+
+          <!-- Numpad -->
+          <div class="grid grid-cols-3 gap-4 w-full mb-6">
+            <button v-for="key in ['1','2','3','4','5','6','7','8','9']" :key="key" @click="handlePinNumpad(key)" class="h-16 rounded-xl bg-gray-50 border border-gray-200 text-2xl font-semibold text-gray-800 hover:bg-gray-100 active:bg-gray-200 transition-colors shadow-sm">
+              {{ key }}
+            </button>
+            <button @click="showPinModal = false; requiredPinAction = null" class="h-16 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-sm font-bold text-gray-600 hover:bg-gray-100 active:bg-gray-200 transition-colors shadow-sm">
+              CANCEL
+            </button>
+            <button @click="handlePinNumpad('0')" class="h-16 rounded-xl bg-gray-50 border border-gray-200 text-2xl font-semibold text-gray-800 hover:bg-gray-100 active:bg-gray-200 transition-colors shadow-sm">
+              0
+            </button>
+            <button @click="handlePinNumpad('backspace')" class="h-16 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 active:bg-gray-200 transition-colors shadow-sm">
+              <UIcon name="i-lucide-delete" class="w-7 h-7 text-gray-600" />
+            </button>
+          </div>
+
+          <button @click="submitPin" :disabled="pinInput.length < 4" class="w-full py-4 rounded-xl bg-[#162456] text-white font-bold text-lg hover:bg-[#1d2f6b] transition-colors disabled:opacity-50">
+            Verify PIN
           </button>
         </div>
       </template>

@@ -6,7 +6,7 @@ const { loadCurrency } = useCurrency()
 
 onMounted(async () => {
   if (user.value) {
-    const { data } = await client
+    const { data } = await (client as any)
       .from('profiles')
       .select('*, outlets(*)')
       .eq('id', user.value.id)
@@ -44,7 +44,10 @@ const handleLogout = async () => {
           <UIcon name="i-lucide-search" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
         </div>
       </div>
-      <div class="flex items-center gap-4">
+        <NuxtLink to="/kitchen" class="text-white/70 hover:text-white transition-colors text-xs font-medium flex items-center gap-1">
+          <UIcon name="i-lucide-chef-hat" class="w-4 h-4" />
+          Kitchen
+        </NuxtLink>
         <NuxtLink to="/backoffice" class="text-white/70 hover:text-white transition-colors text-xs font-medium flex items-center gap-1">
           <UIcon name="i-lucide-layout-dashboard" class="w-4 h-4" />
           Backoffice

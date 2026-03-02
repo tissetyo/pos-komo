@@ -28,6 +28,10 @@ const handleLogin = async () => {
       const onboardingDone = useCookie('onboarding_done')
       onboardingDone.value = 'true'
       navigateTo('/cashier')
+    } else if (profile?.role === 'kitchen') {
+      const onboardingDone = useCookie('onboarding_done')
+      onboardingDone.value = 'true'
+      navigateTo('/kitchen')
     } else {
       // Set onboarding cookie since they're past it
       const onboardingDone = useCookie('onboarding_done')

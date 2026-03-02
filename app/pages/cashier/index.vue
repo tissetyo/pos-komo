@@ -75,11 +75,30 @@ const isProcessing = ref(false)
 const showSuccessModal = ref(false)
 const completedOrder = ref<any>(null)
 
+// Order Management Drawer
+const showOrderDrawer = ref(false)
+const recentOrders = ref<any[]>([])
+const loadingOrders = ref(false)
+
+// Tables State
+const tables = ref<any[]>([])
+const selectedTableId = ref<string | null>(null)
+
 // Tabs & QR Orders State
 const activeTab = ref<string>('walk-in')
 const qrOrders = ref<any[]>([])
 const updatingQrOrder = ref(false)
 let orderSubscription: any = null
+
+const loadTables = async () => {
+  if (!outletId.value) return
+  const { data } = await client
+    .from('tables')
+    .select('*')
+    .eq('outlet_id', outletId.value)
+    .order('table_number', { ascending: true })
+  tables.value = data || []
+}
 
 const loadQrOrders = async () => {
   if (!outletId.value) return
@@ -87,7 +106,7 @@ const loadQrOrders = async () => {
     .from('orders')
     .select('*, tables(table_number, color), order_items(*, product:products(name, price, image_url))')
     .eq('outlet_id', outletId.value)
-    .eq('source', 'qr')
+    // Removed .eq('source', 'qr') to include both QR orders and POS hold orders
     .eq('payment_status', 'pending')
     .order('created_at', { ascending: true })
   qrOrders.value = data || []
@@ -103,11 +122,11 @@ const subscribeToOrders = () => {
   orderSubscription = client
     .channel('public:orders')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `outlet_id=eq.${outletId.value}` }, (payload) => {
-      if (payload.new.source === 'qr' && payload.new.payment_status === 'pending') {
+      if (payload.new.payment_status === 'pending') {
         loadQrOrders()
         toast.add({
-          title: 'New QR Order!',
-          description: `A new order has been placed.`,
+          title: 'New Order Tab!',
+          description: payload.new.source === 'qr' ? 'A new QR order has been placed.' : 'A new order tab has been opened.',
           color: 'warning',
           icon: 'i-lucide-bell-ring'
         })
@@ -202,20 +221,58 @@ const printQrReceipt = (order: any) => {
     </tr>
   `).join('')
 
-  w.document.write(`
-    <html><head><title>Receipt ${order.receipt_number}</title>
-    <style>body{font-family:system-ui,monospace;width:300px;margin:0 auto;padding:20px;color:#000} table{width:100%;font-size:14px} td{border-bottom:1px dashed #ccc}</style></head>
-    <body>
-    <h2 style="text-align:center;margin-bottom:5px">Table ${order.tables?.table_number || '?'}</h2>
-    <p style="text-align:center;margin-top:0;font-size:12px;color:#666">${order.receipt_number}<br>${new Date(order.created_at).toLocaleString()}</p>
-    <hr style="border-top:1px dashed #000;border-bottom:0">
-    <table cellspacing="0">${itemsHtml}</table>
-    <h3 style="text-align:right;margin-top:15px">Total: ${formatPrice(order.total)}</h3>
-    <p style="text-align:center;font-size:12px;margin-top:30px">Thank you!</p>
-    </body></html>
-  `)
+  const html = `
+    <html>
+      <body style="font-family:monospace;width:300px;margin:0 auto;padding:20px;color:#000;">
+        <h2 style="text-align:center;margin:0 0 10px 0">Order #${order.receipt_number}</h2>
+        <p style="text-align:center;margin:0 0 20px 0;font-size:12px">Table ${order.tables?.table_number || 'Walk-in'}</p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px">
+          ${itemsHtml}
+        </table>
+        <div style="border-top:1px dashed #000;padding-top:10px;font-size:16px;font-weight:bold;text-align:right">
+          Total: ${formatPrice(order.total)}
+        </div>
+        <script>window.onload=function(){window.print();window.close()}<\/script>
+      </body>
+    </html>
+  `
+  w.document.write(html)
   w.document.close()
-  setTimeout(() => { w.print(); w.close(); }, 500)
+}
+
+// Fetch recent orders for Order Management
+const fetchRecentOrders = async () => {
+  if (!outletId.value) return
+  loadingOrders.value = true
+  try {
+    const { data, error } = await client
+      .from('orders')
+      .select('*, tables(table_number), order_items(*, product:products(name))')
+      .eq('outlet_id', outletId.value)
+      .order('created_at', { ascending: false })
+      .limit(50)
+      
+    if (error) throw error
+    recentOrders.value = data || []
+  } catch (err: any) {
+    console.error('Failed to load recent orders:', err.message)
+  } finally {
+    loadingOrders.value = false
+  }
+}
+
+watch(showOrderDrawer, (isOpen) => {
+  if (isOpen) fetchRecentOrders()
+})
+
+const getStatusColor = (status: string) => {
+  switch(status) {
+    case 'new': return 'bg-red-100 text-red-700 border-red-200'
+    case 'processing': return 'bg-amber-100 text-amber-700 border-amber-200'
+    case 'ready': return 'bg-blue-100 text-blue-700 border-blue-200'
+    case 'completed': return 'bg-emerald-100 text-emerald-700 border-emerald-200'
+    default: return 'bg-gray-100 text-gray-700 border-gray-200'
+  }
 }
 
 // Load products from Supabase
@@ -260,6 +317,12 @@ const loadProducts = async () => {
     // Build categories
     const cats = new Set(products.value.map(p => p.category))
     categories.value = ['All Items', ...Array.from(cats)]
+
+    await loadQrOrders()
+    await loadTables() // Load tables when products are loaded
+    subscribeToOrders()
+  } catch (err: any) {
+    console.error('Error loading POS data:', err)
   } finally {
     loading.value = false
   }
@@ -367,9 +430,70 @@ const clearOrder = () => {
 
 const openCheckout = () => {
   if (orderItems.value.length === 0) return
-  paymentMethod.value = 'cash'
-  cashReceived.value = ''
-  showCheckout.value = true
+  createOrder()
+}
+
+const createOrder = async () => {
+  if (!userId.value || !outletId.value) return
+  if (orderItems.value.length === 0) return
+  
+  if (orderType.value === 'dine-in' && !selectedTableId.value) {
+    alert('Please select a table for Dine-in orders')
+    return
+  }
+  
+  isProcessing.value = true
+
+  try {
+    const receiptNumber = 'TRX-' + Date.now().toString().slice(-8)
+
+    // Save as holding order (payment_status: 'pending') and POS source
+    const { data: order, error: orderErr } = await client
+      .from('orders')
+      .insert({
+        receipt_number: receiptNumber,
+        outlet_id: outletId.value,
+        cashier_id: userId.value,
+        subtotal: subtotal.value,
+        tax: tax.value,
+        discount: 0,
+        total: total.value,
+        payment_method: null,
+        payment_status: 'pending',
+        order_status: 'new', // It starts as new so we see it pulsing, or 'processing' to go straight to kitchen
+        order_type: orderType.value,
+        table_id: selectedTableId.value,
+        source: 'pos' // Differentiate from 'qr'
+      } as any)
+      .select()
+      .single()
+
+    if (orderErr) throw orderErr
+
+    const items = orderItems.value.map(item => ({
+      order_id: (order as any).id,
+      product_id: item.id,
+      quantity: item.quantity,
+      unit_price: item.finalPrice,
+      total_price: item.finalPrice * item.quantity,
+      variation_snapshot: Object.keys(item.variationSnapshot).length > 0 ? item.variationSnapshot : null,
+      notes: orderNote.value || null
+    }))
+
+    const { error: itemsErr } = await client.from('order_items').insert(items as any)
+    if (itemsErr) throw itemsErr
+
+    toast.add({ title: 'Order created', description: 'Order moved to Active Tabs', color: 'success' })
+    
+    // Clear order form, reload tabs
+    startNewOrder()
+    await loadQrOrders()
+
+  } catch (err: any) {
+    alert('Failed to create order: ' + (err.message || 'Unknown error'))
+  } finally {
+    isProcessing.value = false
+  }
 }
 
 // Numpad
@@ -458,6 +582,7 @@ const processPayment = () => {
 const startNewOrder = () => {
   orderItems.value = []
   orderNote.value = ''
+  selectedTableId.value = null
   completedOrder.value = null
   showSuccessModal.value = false
 }
@@ -470,27 +595,39 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
   <div class="flex flex-col h-full w-full bg-gray-50/50">
 
     <!-- TOP TABS -->
-    <div class="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-2 shrink-0 overflow-x-auto no-scrollbar shadow-sm z-10">
+    <div class="h-14 bg-white border-b border-gray-200 flex items-center px-4 justify-between shrink-0 shadow-sm z-10">
+      <div class="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-[80%]">
+        <button 
+          @click="activeTab = 'walk-in'"
+          :class="['h-10 px-6 rounded-xl font-bold text-sm transition-all flex items-center gap-2', activeTab === 'walk-in' ? 'bg-[#162456] text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200']"
+        >
+          <UIcon name="i-lucide-user-plus" class="w-4 h-4" />
+          Walk-in Order
+        </button>
+
+        <div v-if="qrOrders.length > 0" class="w-px h-6 bg-gray-200 mx-2 flex-shrink-0"></div>
+
+        <button
+          v-for="order in qrOrders" :key="order.id"
+          @click="activeTab = order.id"
+          class="flex-shrink-0"
+          :class="['h-10 px-5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 whitespace-nowrap', activeTab === order.id ? 'bg-[#EA580C] text-white shadow-md' : 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100']"
+        >
+          <div class="w-6 h-6 rounded-md flex items-center justify-center bg-white/20">
+            <UIcon name="i-lucide-armchair" class="w-3.5 h-3.5" />
+          </div>
+          Table {{ order.tables?.table_number || '?' }}
+          <span v-if="order.order_status === 'new'" class="w-2 h-2 rounded-full bg-red-500 animate-pulse ml-1"></span>
+        </button>
+      </div>
+
+      <!-- Right Actions -->
       <button 
-        @click="activeTab = 'walk-in'"
-        :class="['h-10 px-6 rounded-xl font-bold text-sm transition-all flex items-center gap-2', activeTab === 'walk-in' ? 'bg-[#162456] text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200']"
+        @click="showOrderDrawer = true"
+        class="h-10 px-4 rounded-xl font-bold text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors flex items-center gap-2 border border-gray-200 shadow-sm whitespace-nowrap"
       >
-        <UIcon name="i-lucide-user-plus" class="w-4 h-4" />
-        Walk-in Order
-      </button>
-
-      <div v-if="qrOrders.length > 0" class="w-px h-6 bg-gray-200 mx-2"></div>
-
-      <button
-        v-for="order in qrOrders" :key="order.id"
-        @click="activeTab = order.id"
-        :class="['h-10 px-5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 whitespace-nowrap', activeTab === order.id ? 'bg-[#EA580C] text-white shadow-md' : 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100']"
-      >
-        <div class="w-6 h-6 rounded-md flex items-center justify-center bg-white/20">
-          <UIcon name="i-lucide-armchair" class="w-3.5 h-3.5" />
-        </div>
-        Table {{ order.tables?.table_number || '?' }}
-        <span v-if="order.order_status === 'new'" class="w-2 h-2 rounded-full bg-red-500 animate-pulse ml-1"></span>
+        <UIcon name="i-lucide-clock-3" class="w-4 h-4" />
+        Past Orders
       </button>
     </div>
 
@@ -818,6 +955,16 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
               </div>
             </div>
           </div>
+          
+          <div v-if="orderType === 'dine-in'" class="mb-4">
+            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 mt-2">Table Number</label>
+            <select v-model="selectedTableId" class="w-full h-11 px-3 rounded-xl border border-gray-300 bg-white text-gray-900 text-sm focus:border-[#162456] outline-none shadow-sm">
+              <option :value="null" disabled>Select Table...</option>
+              <option v-for="table in tables" :key="table.id" :value="table.id">
+                Table {{ table.table_number }}
+              </option>
+            </select>
+          </div>
 
           <div class="flex gap-3 mb-3">
             <button class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors disabled:opacity-40" :disabled="orderItems.length === 0" @click="clearOrder">
@@ -831,10 +978,11 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
           <button
             @click="openCheckout"
             class="w-full flex items-center justify-center gap-3 py-4 rounded-xl bg-[#162456] text-white font-bold text-lg hover:bg-[#1d2f6b] transition-colors disabled:opacity-50"
-            :disabled="orderItems.length === 0"
+            :disabled="orderItems.length === 0 || (orderType === 'dine-in' && !selectedTableId) || isProcessing"
           >
-            <UIcon name="i-lucide-wallet" class="w-5 h-5" />
-            Checkout
+            <UIcon v-if="isProcessing" name="i-lucide-loader-2" class="w-5 h-5 animate-spin" />
+            <UIcon v-else name="i-lucide-clipboard-list" class="w-5 h-5" />
+            Create Order
           </button>
         </div>
       </div>
@@ -1114,6 +1262,79 @@ const orderTypeNames = { 'dine-in': 'Dine-in', 'takeaway': 'Takeaway', 'delivery
         </div>
       </template>
     </UModal>
+
+    <!-- Order Management Slideover -->
+    <USlideover v-model:open="showOrderDrawer" title="Order Management" description="View and reprint past orders" :ui="{ content: 'max-w-md w-full' }">
+      <template #body>
+        <div class="h-full flex flex-col pt-0">
+          
+          <div v-if="loadingOrders" class="flex-1 flex flex-col items-center justify-center">
+            <UIcon name="i-lucide-loader-2" class="w-8 h-8 animate-spin text-gray-400 mb-2" />
+            <p class="text-gray-500">Loading recent orders...</p>
+          </div>
+          
+          <div v-else-if="recentOrders.length === 0" class="flex-1 flex flex-col items-center justify-center text-center p-8">
+            <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <UIcon name="i-lucide-receipt" class="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 class="font-bold text-gray-900 text-lg">No Orders Yet</h3>
+            <p class="text-sm text-gray-500 mt-1">Orders processed today will appear here.</p>
+          </div>
+
+          <div v-else class="flex-1 overflow-y-auto px-4 py-2 space-y-3 custom-scrollbar">
+            <div 
+              v-for="order in recentOrders" 
+              :key="order.id" 
+              class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm"
+            >
+              <div class="flex items-start justify-between mb-3">
+                <div>
+                  <h4 class="font-bold text-gray-900">{{ order.receipt_number }}</h4>
+                  <p class="text-[11px] text-gray-500 mt-0.5">
+                    {{ new Date(order.created_at).toLocaleTimeString() }} • 
+                    <span class="font-semibold text-gray-700">Table {{ order.tables?.table_number || 'Walk-in' }}</span>
+                  </p>
+                </div>
+                <div :class="['px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border', getStatusColor(order.order_status)]">
+                  {{ order.order_status }}
+                </div>
+              </div>
+              
+              <div class="space-y-1 mb-4">
+                <p class="text-sm font-semibold text-gray-900">{{ formatPrice(order.total) }} <span class="font-normal text-xs text-gray-500">({{ order.order_items.length }} items)</span></p>
+                <p class="text-xs text-gray-500">Paid via <span class="capitalize font-medium">{{ order.payment_method || 'pending' }}</span></p>
+              </div>
+              
+              <div class="flex gap-2">
+                <button 
+                  @click="printQrReceipt(order)"
+                  class="flex-1 py-2 text-xs font-bold bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <UIcon name="i-lucide-printer" class="w-3.5 h-3.5" />
+                  Print Receipt
+                </button>
+                <button 
+                  v-if="order.order_status === 'completed'"
+                  class="flex-1 py-2 text-xs font-bold bg-gray-100 rounded-lg text-gray-400 cursor-not-allowed flex items-center justify-center gap-1.5"
+                >
+                  <UIcon name="i-lucide-check-circle" class="w-3.5 h-3.5" />
+                  Settled
+                </button>
+                <button 
+                  v-else-if="order.payment_status === 'pending'"
+                  @click="activeTab = order.id; showOrderDrawer = false"
+                  class="flex-1 py-2 text-xs font-bold bg-[#162456] rounded-lg text-white hover:bg-[#1d2f6b] flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                >
+                  <UIcon name="i-lucide-external-link" class="w-3.5 h-3.5" />
+                  Open Tab
+                </button>
+              </div>
+            </div>
+          </div>
+          
+        </div>
+      </template>
+    </USlideover>
   </div>
 </template>
 

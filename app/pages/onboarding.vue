@@ -79,18 +79,21 @@ const pinString = computed(() => cashierPin.value.join(''))
 // Load existing progress on mount
 onMounted(async () => {
   if (!user.value) return
-  const { data: profile } = await client
+  const { data } = await (client as any)
     .from('profiles')
     .select('onboarding_step, outlet_id')
     .eq('id', user.value.id)
     .single()
+    
+  const profile = data as any
 
   if (profile?.onboarding_step && profile.onboarding_step > 1) {
     currentStep.value = profile.onboarding_step
   }
 
   if (profile?.outlet_id) {
-    const { data: outlet } = await client.from('outlets').select('*').eq('id', profile.outlet_id).single()
+    const { data: outletData } = await (client as any).from('outlets').select('*').eq('id', profile.outlet_id).single()
+    const outlet = outletData as any
     if (outlet) {
       storeInfo.value.name = outlet.name || ''
       storeInfo.value.city = outlet.city || ''
@@ -171,21 +174,33 @@ const saveFirstProduct = async () => {
 
 const completeSetup = async () => {
   if (!user.value) return
-  const updateData: any = { onboarding_completed: true, onboarding_step: totalSteps }
-  if (pinString.value.length === 4) updateData.pin = pinString.value
-
-  const { error } = await (client as any).from('profiles').update(updateData).eq('id', user.value.id)
-  if (error) {
-    console.error('Failed to complete onboarding:', error)
-    alert('Failed to save onboarding. Please try again.')
-    return
+  
+  const updateData: any = { 
+    onboarding_completed: true, 
+    onboarding_step: totalSteps 
+  }
+  
+  if (pinString.value.length === 4) {
+    updateData.pin = pinString.value
   }
 
-  // Set cookie so middleware skips the onboarding check
-  const onboardingDone = useCookie('onboarding_done')
-  onboardingDone.value = 'true'
+  try {
+    const { error } = await (client as any)
+      .from('profiles')
+      .update(updateData)
+      .eq('id', user.value.id)
 
-  navigateTo('/backoffice')
+    if (error) throw error
+
+    // Set cookie so middleware skips the onboarding check
+    const onboardingDone = useCookie('onboarding_done')
+    onboardingDone.value = 'true'
+
+    navigateTo('/backoffice')
+  } catch (err: any) {
+    console.error('Failed to complete onboarding:', err)
+    alert(`Failed to save onboarding: ${err.message}`)
+  }
 }
 </script>
 

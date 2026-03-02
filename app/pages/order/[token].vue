@@ -136,11 +136,40 @@ const placeOrder = async () => {
     const serviceAmount = Math.round(subtotal * serviceCharge / 100)
     const total = subtotal + taxAmount + serviceAmount
 
+    // Auto-save or map customer status
+    let customerId = null
+    const { data: existingCustomer } = await (client as any)
+      .from('customers')
+      .select('id')
+      .eq('phone', customerPhone.value)
+      .eq('outlet_id', tableData.value.outlet_id)
+      .maybeSingle()
+
+    if (existingCustomer) {
+      customerId = existingCustomer.id
+      // Update name if a name was provided and it's different/new
+      if (customerName.value) {
+        await (client as any).from('customers').update({ name: customerName.value }).eq('id', customerId)
+      }
+    } else {
+      // Create new customer
+      const { data: newCustomer } = await (client as any).from('customers').insert({
+        name: customerName.value || `QR Customer (${customerPhone.value})`,
+        phone: customerPhone.value,
+        outlet_id: tableData.value.outlet_id
+      }).select('id').single()
+
+      if (newCustomer) {
+        customerId = newCustomer.id
+      }
+    }
+
     // Create order — cast as any to bypass typed client RLS issues
     const { data: order, error: orderErr } = await (client as any).from('orders').insert({
       receipt_number: receiptNumber,
       outlet_id: tableData.value.outlet_id,
       table_id: tableData.value.id,
+      customer_id: customerId,
       source: 'qr',
       customer_name: customerName.value || null,
       customer_phone: customerPhone.value,

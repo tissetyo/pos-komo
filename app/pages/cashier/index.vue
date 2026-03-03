@@ -219,6 +219,7 @@ const checkoutQrOrder = (orderId: string) => {
   paymentMethod.value = 'cash'
   cashReceived.value = ''
   showCheckout.value = true
+  activeTab.value = 'walk-in'
 }
 
 const printQrReceipt = (order: any) => {

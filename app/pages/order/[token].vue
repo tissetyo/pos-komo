@@ -21,6 +21,7 @@ const submitting = ref(false)
 const errorMsg = ref('')
 const searchQuery = ref('')
 const stripeEnabled = ref(false)
+const selectedPayment = ref<'cash' | 'debit' | 'qris' | 'online'>('cash')
 
 // Checkout form
 const customerName = ref('')
@@ -180,7 +181,7 @@ const placeOrder = async () => {
       subtotal,
       tax: taxAmount,
       total,
-      payment_method: 'cash',
+      payment_method: selectedPayment.value === 'online' ? 'credit' : selectedPayment.value,
       payment_status: 'pending',
       order_status: 'new',
       order_type: 'dine-in'
@@ -199,6 +200,12 @@ const placeOrder = async () => {
 
     await (client as any).from('order_items').insert(items)
 
+    // Trigger online payment immediately if Stripe selected
+    if (selectedPayment.value === 'online' && stripeEnabled.value) {
+      await payOnline(receiptNumber)
+      return // PayOnline handles the redirect or error alert
+    }
+
     showCheckout.value = false
     showSuccess.value = true
     cart.value = []
@@ -214,18 +221,19 @@ const newOrder = () => {
   customerName.value = ''
   customerPhone.value = ''
   activeCategory.value = 'All'
+  selectedPayment.value = 'cash'
 }
 
 const paying = ref(false)
-const payOnline = async () => {
-  if (!completedOrderNumber.value) return
+const payOnline = async (receiptNum: string) => {
+  if (!receiptNum) return
   paying.value = true
   
   try {
     const { data: order } = await (client as any)
       .from('orders')
       .select('id')
-      .eq('receipt_number', completedOrderNumber.value)
+      .eq('receipt_number', receiptNum)
       .single()
       
     if (!order) throw new Error('Order not found')
@@ -321,21 +329,9 @@ const categoryColors = [
         <p class="text-amber-800 font-semibold">📍 Table {{ tableData.table_number }}</p>
         <p class="text-amber-600 text-sm mt-1">Please wait while we prepare your food.</p>
       </div>
-      
-      <div v-if="stripeEnabled" class="space-y-3 mb-6">
-        <button 
-          @click="payOnline" 
-          :disabled="paying"
-          class="w-full bg-[#635BFF] text-white rounded-2xl px-6 py-4 font-bold text-base shadow-lg shadow-indigo-200 disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
-          <UIcon v-if="paying" name="i-lucide-loader-2" class="w-5 h-5 animate-spin" />
-          <UIcon v-else name="i-lucide-credit-card" class="w-5 h-5" />
-          {{ paying ? 'Processing...' : 'Pay Online Now' }}
-        </button>
-        <p class="text-xs text-gray-500">or pay with cash at the counter later</p>
-      </div>
 
-      <button :class="['w-full rounded-2xl px-6 py-4 font-bold text-base transition-transform', stripeEnabled ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-200 active:scale-[0.98]']" @click="newOrder">
-        🍽️ Order {{ stripeEnabled ? 'Something Else' : 'More' }}
+      <button class="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-2xl px-6 py-4 font-bold text-base shadow-lg shadow-orange-200 active:scale-[0.98] transition-transform" @click="newOrder">
+        🍽️ Order More
       </button>
     </div>
   </div>
@@ -386,11 +382,49 @@ const categoryColors = [
         </div>
       </div>
 
-      <button :disabled="!canSubmit"
-        class="w-full bg-gradient-to-r from-green-500 to-emerald-500 disabled:from-gray-300 disabled:to-gray-300 text-white rounded-2xl px-6 py-4 font-bold text-base shadow-lg shadow-green-200 disabled:shadow-none active:scale-[0.98] transition-all"
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Payment Method</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <button 
+            @click="selectedPayment = 'cash'"
+            :class="['flex flex-col flex-1 items-center gap-2 p-3 rounded-xl border-2 transition-all', selectedPayment === 'cash' ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-md' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300']">
+            <UIcon name="i-lucide-banknote" class="w-6 h-6" />
+            <span class="text-xs font-bold leading-tight">Cash at Counter</span>
+          </button>
+          <button 
+            @click="selectedPayment = 'qris'"
+            :class="['flex flex-col flex-1 items-center gap-2 p-3 rounded-xl border-2 transition-all', selectedPayment === 'qris' ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-md' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300']">
+            <UIcon name="i-lucide-qr-code" class="w-6 h-6" />
+            <span class="text-xs font-bold leading-tight">Pay with QRIS</span>
+          </button>
+          <button 
+            @click="selectedPayment = 'debit'"
+            :class="['flex flex-col flex-1 items-center gap-2 p-3 rounded-xl border-2 transition-all', selectedPayment === 'debit' ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-md' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300']">
+            <UIcon name="i-lucide-credit-card" class="w-6 h-6" />
+            <span class="text-xs font-bold leading-tight">Pay by Card</span>
+          </button>
+          
+          <button 
+            v-if="stripeEnabled"
+            @click="selectedPayment = 'online'"
+            :class="['flex flex-col flex-1 items-center gap-2 p-3 rounded-xl border-2 transition-all', selectedPayment === 'online' ? 'border-[#635BFF] bg-[#F6F9FC] text-[#635BFF] shadow-md' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300']">
+            <UIcon name="i-lucide-smartphone-nfc" class="w-6 h-6" />
+            <span class="text-xs font-bold leading-tight">Pay Online Now</span>
+          </button>
+        </div>
+      </div>
+
+      <button :disabled="!canSubmit || submitting || paying"
+        class="w-full bg-gradient-to-r transition-all rounded-2xl px-6 py-4 font-bold text-base shadow-lg focus:ring-4 outline-none disabled:shadow-none disabled:opacity-50 active:scale-[0.98]"
+        :class="selectedPayment === 'online' ? 'from-[#635BFF] to-[#0A2540] text-white shadow-indigo-200 focus:ring-indigo-300' : 'from-green-500 to-emerald-500 text-white shadow-green-200 focus:ring-green-300'"
         @click="placeOrder">
-        <span v-if="submitting">Placing Order...</span>
-        <span v-else>✅ Place Order — {{ formatPrice(cartTotal) }}</span>
+        <span v-if="submitting || paying" class="flex items-center justify-center gap-2">
+          <UIcon name="i-lucide-loader-2" class="w-5 h-5 animate-spin" /> Processing...
+        </span>
+        <span v-else class="flex items-center justify-center gap-2">
+          <UIcon :name="selectedPayment === 'online' ? 'i-lucide-sparkles' : 'i-lucide-check-circle'" class="w-5 h-5 border-white bg-transparent" />
+          {{ selectedPayment === 'online' ? 'Pay & Place Order' : 'Place Order' }} — {{ formatPrice(cartTotal) }}
+        </span>
       </button>
     </div>
   </div>

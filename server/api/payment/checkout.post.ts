@@ -1,4 +1,4 @@
-import { serverSupabaseClient } from '#supabase/server'
+import { serverSupabaseServiceRole } from '#supabase/server'
 import Stripe from 'stripe'
 
 export default defineEventHandler(async (event) => {
@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, message: 'Order ID is required' })
     }
 
-    const client = await serverSupabaseClient(event)
+    const client = await serverSupabaseServiceRole(event)
 
     // Fetch the order and its outlet's integrations
     const { data: order, error: orderErr } = await client
